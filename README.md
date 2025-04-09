@@ -168,4 +168,5 @@ Follow these steps to set up your development environment:
     ```
     This will typically open the application in your default web browser at `http://localhost:3000`.
 
-https://raw.githubusercontent.com/harithzulfaizal/safenest-webapp/blob/main/assets/Screen%20Recording%202025-04-09%20at%2011.47.13%E2%80%AFPM.mov
+
+https://github.com/user-attachments/assets/2a4c5ad3-44a3-4e8b-a06d-ac1df8aae5fe
