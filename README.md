@@ -1,70 +1,169 @@
-# Getting Started with Create React App
+# Financial Dashboard Project Structure
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+```
+src/
+├── components/
+│   ├── ui/
+│   │   ├── Accordion.jsx
+│   │   ├── Button.jsx
+│   │   ├── Card.jsx
+│   │   ├── Form.jsx
+│   │   └── Table.jsx
+│   │
+│   ├── layout/
+│   │   ├── Navigation.jsx
+│   │   └── PageLayout.jsx
+│   │
+│   └── features/
+│       ├── DetailItem.jsx
+│       │
+│       ├── profile/
+│       │   ├── PersonalDetails.jsx
+│       │   ├── FinancialGoals.jsx
+│       │   ├── FinancialKnowledge.jsx
+│       │   └── FinancialProfile.jsx
+│       │
+│       ├── insights/
+│       │   └── InsightsList.jsx
+│       │
+│       └── transactions/
+│           └── TransactionList.jsx
+│
+├── pages/
+│   ├── LoginPage.jsx
+│   ├── ProfilePage.jsx
+│   ├── InsightsPage.jsx
+│   └── TransactionsPage.jsx
+│
+├── context/
+│   ├── AuthContext.jsx
+│   └── UserContext.jsx
+│
+├── data/
+│   └── mockData.js
+│
+├── utils/
+│   └── formatters.js
+│
+├── styles/
+│   └── globals.css
+│
+├── App.jsx
+└── index.jsx
+```
 
-## Available Scripts
+## Key File Purposes
 
-In the project directory, you can run:
+### Entry Points
+- `index.jsx`: The application entry point that sets up context providers
+- `App.jsx`: Main component that handles routing between pages
 
-### `npm start`
+### Context
+- `AuthContext.jsx`: Manages authentication state
+- `UserContext.jsx`: Provides user data to components
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Pages
+- `LoginPage.jsx`: Handles user authentication
+- `ProfilePage.jsx`: Shows user profile and financial information
+- `InsightsPage.jsx`: Displays financial insights and recommendations
+- `TransactionsPage.jsx`: Lists and filters financial transactions
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Components
+- **UI Components**: Reusable base components like Button, Card, etc.
+- **Layout Components**: Structure components like Navigation and PageLayout
+- **Feature Components**: Domain-specific components organized by feature
 
-### `npm test`
+### Data & Utilities
+- `mockData.js`: Contains dummy data for the application
+- `formatters.js`: Helper functions for formatting data
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+# Financial Dashboard
 
-### `npm run build`
+This document provides instructions on how to set up the Financial Dashboard project locally on your machine.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Getting Started
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Prerequisites
 
-### `npm run eject`
+Before you begin, ensure you have the following installed on your system:
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+* **Node.js and npm:** You can download them from <https://nodejs.org/>. Create React App requires Node.js version 14.0.0 or higher.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Installation
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Follow these steps to set up your development environment:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+1.  **Clone the repository (or create a new project):**
 
-## Learn More
+    If you are cloning an existing repository:
+    ```bash
+    git clone <repository-url>
+    cd financial-dashboard
+    ```
+    Alternatively, if starting from scratch with Create React App:
+    ```bash
+    npx create-react-app financial-dashboard
+    cd financial-dashboard
+    ```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+2.  **Install Project Dependencies:**
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+    Install the necessary npm packages, including React and specific libraries like `lucide-react` for icons.
+    ```bash
+    npm install lucide-react
+    ```
+    *(Note: Add any other core dependencies required by the project here)*
 
-### Code Splitting
+3.  **Install Development Dependencies (Tailwind CSS):**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+    Install Tailwind CSS and its peer dependencies (`postcss`, `autoprefixer`) as development dependencies.
+    ```bash
+    npm install -D @tailwindcss/postcss postcss@^8.4.31 autoprefixer@^10.4.16 tailwindcss@^3.3.5
+    ```
 
-### Analyzing the Bundle Size
+4.  **Initialize Tailwind CSS:**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+    Generate the Tailwind configuration files (`tailwind.config.js` and `postcss.config.js`).
+    ```bash
+    npx tailwindcss init -p
+    ```
 
-### Making a Progressive Web App
+5.  **Configure Tailwind Templates:**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+    Update `tailwind.config.js` to include the paths to all your template files:
+    ```javascript
+    /** @type {import('tailwindcss').Config} */
+    module.exports = {
+      content: [
+        "./src/**/*.{js,jsx,ts,tsx}", // Adjust paths based on your project structure
+      ],
+      theme: {
+        extend: {},
+      },
+      plugins: [],
+      darkMode: 'class', // Or 'media' based on preference
+    }
+    ```
 
-### Advanced Configuration
+6.  **Configure PostCSS:**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+    Ensure your `postcss.config.js` includes Tailwind CSS and Autoprefixer. The `init` command usually sets this up correctly, but verify it looks like this:
+    ```javascript
+    module.exports = {
+      plugins: {
+        tailwindcss: {},
+        autoprefixer: {},
+      },
+    }
+    ```
+    *(Note: The user-provided config used `@tailwindcss/postcss`. The standard setup uses `tailwindcss: {}`)*
 
-### Deployment
+7.  **Run the Development Server:**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+    Start the React development server:
+    ```bash
+    npm start
+    ```
+    This will typically open the application in your default web browser at `http://localhost:3000`.
