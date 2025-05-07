@@ -38,10 +38,16 @@ export const Navigation = ({ currentPage, setCurrentPage, userProfile, onLogout 
 
       <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center mb-3">
-          <UserIconNav className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 p-1 mr-2 text-gray-600 dark:text-gray-400" />
-          <div>
+          <UserIconNav className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 p-1 mr-2 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+          <div className="overflow-hidden"> {/* Added overflow-hidden to help with truncation */}
+            {/* Display only the email */}
+            <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={userProfile?.email || 'user@example.com'}>
+              {userProfile?.email || 'user@example.com'}
+            </p>
+            {/* Removed the name display:
             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{userProfile?.name || 'User'}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userProfile?.email || 'user@example.com'}</p>
+            */}
           </div>
         </div>
         <Button variant="secondary" onClick={onLogout} icon={LogIn} className="w-full justify-center">
