@@ -59,8 +59,16 @@ export const UserProvider = ({ children }) => {
       savingsAmount: 'N/A',
       liabilities: 'N/A',
       totalDebt: 'N/A',
+      numberOfDebtAccounts: 0,
+      detailedDebts: [], // Added for individual debt display
       dti: 'N/A',
-      spendingHabit: { topCategory: 'N/A', style: 'N/A' },
+      spendingHabit: {
+        topCategory: 'N/A',
+        style: 'N/A',
+        expenseSummary: {}, // Original summary based on monthly_amount
+        expenseSummaryForLatestMonth: {}, // Added for latest month's actuals
+        latestMonthForSummary: null, // Added to store which month is summarized
+      },
       savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' },
     },
   });
@@ -71,8 +79,6 @@ export const UserProvider = ({ children }) => {
   useEffect(() => {
     if (!isLoggedIn) {
       setLoading(false);
-      // Optionally reset user data or keep stale data
-      // setUser(initialState); // if you want to clear data on logout
       return;
     }
 
@@ -87,40 +93,100 @@ export const UserProvider = ({ children }) => {
         }
         const data = await response.json();
 
+        // --- Process Expenses for Latest Month ---
+        let expenseSummaryForLatestMonth = {};
+        let latestMonthForSummary = null;
+        if (data.expenses && data.expenses.length > 0) {
+          const expensesWithDates = data.expenses.map(exp => {
+            // Ensure monthly_amount is a number, default to 0 if not.
+            // This amount is treated as the actual transaction amount.
+            const amount = parseFloat(String(exp.monthly_amount || '0').replace(/[^0-9.-]+/g,""));
+            return {
+              ...exp,
+              date: exp.timestamp ? new Date(exp.timestamp) : null,
+              amount: isNaN(amount) ? 0 : amount,
+            };
+          }).filter(exp => exp.date instanceof Date && !isNaN(exp.date)); // Filter out invalid dates
+
+          if (expensesWithDates.length > 0) {
+            // Sort by date descending to find the latest month easily
+            expensesWithDates.sort((a, b) => b.date - a.date);
+            const latestDate = expensesWithDates[0].date;
+            const latestYear = latestDate.getFullYear();
+            const latestMonthNum = latestDate.getMonth(); // 0-indexed
+
+            latestMonthForSummary = `${latestYear}-${String(latestMonthNum + 1).padStart(2, '0')}`; // YYYY-MM format
+
+            // Filter expenses for that latest month and year
+            const latestMonthExpenses = expensesWithDates.filter(exp =>
+              exp.date.getFullYear() === latestYear && exp.date.getMonth() === latestMonthNum
+            );
+
+            // Summarize by category for the latest month
+            expenseSummaryForLatestMonth = latestMonthExpenses.reduce((acc, curr) => {
+              const category = curr.expense_category || 'Uncategorized';
+              acc[category] = (acc[category] || 0) + curr.amount; // Summing the actual transaction amount
+              return acc;
+            }, {});
+          }
+        }
+        // --- End Process Expenses for Latest Month ---
+
+        // Original summary (can be kept or removed based on need)
+        const originalExpenseSummary = data.expenses && data.expenses.length > 0 ?
+          data.expenses.reduce((acc, curr) => {
+            const category = curr.expense_category || 'Uncategorized';
+            const amount = parseFloat(String(curr.monthly_amount || '0').replace(/[^0-9.-]+/g,""));
+            acc[category] = (acc[category] || 0) + (isNaN(amount) ? 0 : amount);
+            return acc;
+          }, {}) : {};
+
         const transformedUser = {
-          ...user, // Keep mock name, email etc. or update if API provides them
+          ...user,
+          name: data.profile?.name || user.name,
+          email: data.profile?.email || user.email,
           personalDetails: {
             netHouseholdIncome: data.income && data.income.length > 0
-              ? formatCurrency(data.income.reduce((sum, item) => sum + parseFloat(item.monthly_income || 0), 0)) + ' monthly'
+              ? formatCurrency(data.income.reduce((sum, item) => sum + parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g,"")), 0)) + ' monthly'
               : 'N/A',
             employmentStatus: data.profile?.retirement_status === "Employed" ? "Full-time" : data.profile?.retirement_status || "N/A",
             householdComposition: {
-              dependentAdults: 0, // API only gives num_children. This is a placeholder.
+              dependentAdults: 0,
               dependentChildren: data.profile?.num_children || 0,
             },
-            emergencyFundSavingsLevel: 'N/A', // Not directly available from this API endpoint
+            emergencyFundSavingsLevel: 'N/A',
           },
           financialGoals: data.profile?.goals ? transformGoals(data.profile.goals) : [],
           financialKnowledge: transformFinancialKnowledge(data.financial_knowledge),
           financialProfile: {
-            netWorth: 'N/A', // Placeholder
-            assets: 'N/A', // Placeholder
-            savingsAmount: 'N/A', // Placeholder
-            liabilities: 'N/A', // Placeholder
-            totalDebt: data.debts && data.debts.length > 0
-              ? formatCurrency(data.debts.reduce((sum, item) => sum + parseFloat(item.current_balance || 0), 0))
+            netWorth: 'N/A',
+            assets: 'N/A',
+            savingsAmount: 'N/A',
+            liabilities: data.debts && data.debts.length > 0
+              ? formatCurrency(data.debts.reduce((sum, item) => sum + parseFloat(String(item.current_balance || '0').replace(/[^0-9.-]+/g,"")), 0))
               : formatCurrency(0),
-            dti: 'N/A', // Placeholder
+            totalDebt: data.debts && data.debts.length > 0
+              ? formatCurrency(data.debts.reduce((sum, item) => sum + parseFloat(String(item.current_balance || '0').replace(/[^0-9.-]+/g,"")), 0))
+              : formatCurrency(0),
+            numberOfDebtAccounts: data.debts ? data.debts.length : 0,
+            detailedDebts: data.debts ? data.debts.map(d => ({ // Store detailed debts
+                id: d.debt_id,
+                name: d.account_name || 'N/A',
+                // Ensure current_balance is a number for calculations, format for display later
+                amount: parseFloat(String(d.current_balance || '0').replace(/[^0-9.-]+/g,"")),
+                interest_rate: d.interest_rate, // Keep as is, or format if needed
+            })) : [],
+            dti: 'N/A',
             spendingHabit: {
-              topCategory: data.expenses && data.expenses.length > 0 ?
-                Object.entries(data.expenses.reduce((acc, curr) => {
-                  acc[curr.expense_category] = (acc[curr.expense_category] || 0) + parseFloat(curr.monthly_amount || 0);
-                  return acc;
-                }, {})).sort(([, a], [, b]) => b - a)[0]?.[0] || 'N/A'
-                : 'N/A',
-              style: 'N/A' // Placeholder
+              topCategory: Object.keys(expenseSummaryForLatestMonth).length > 0 ?
+                Object.entries(expenseSummaryForLatestMonth).sort(([, a], [, b]) => b - a)[0][0]
+                : (Object.keys(originalExpenseSummary).length > 0 ? Object.entries(originalExpenseSummary).sort(([, a], [, b]) => b - a)[0][0] : 'N/A'),
+              style: 'N/A',
+              expenseSummary: originalExpenseSummary, // Keep original if needed
+              expenseSummaryForLatestMonth: expenseSummaryForLatestMonth,
+              latestMonthForSummary: latestMonthForSummary,
             },
-            savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' }, // Placeholders
+            savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' },
           },
           _rawProfile: data.profile,
           _rawIncome: data.income,
@@ -137,7 +203,7 @@ export const UserProvider = ({ children }) => {
     };
 
     fetchUserData();
-  }, [isLoggedIn]); // Effect dependencies
+  }, [isLoggedIn]);
 
   const value = {
     user,
