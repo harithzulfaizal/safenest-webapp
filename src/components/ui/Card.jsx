@@ -26,3 +26,10 @@ export const CardDescription = ({ children, className = '' }) => (
 export const CardContent = ({ children, className = '' }) => (
   <div className={`p-6 ${className}`}>{children}</div>
 );
+
+// Added CardFooter component
+export const CardFooter = ({ children, className = '' }) => (
+  <div className={`p-6 pt-0 border-t border-gray-200 dark:border-gray-700 ${className}`}>
+    {children}
+  </div>
+);
