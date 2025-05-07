@@ -97,7 +97,7 @@ export const FinancialProfile = ({ profile, onAddDebt, onEditDebt, onDeleteDebt 
                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{debt.name}</p>
                         <p className="text-xs text-gray-600 dark:text-gray-400">
                           Balance: {formatCurrency(debt.amount)}
-                          {debt.interest_rate && ` | Rate: ${(parseFloat(debt.interest_rate) * 100).toFixed(2)}%`}
+                          {debt.interest_rate && ` | Rate: ${parseFloat(debt.interest_rate).toFixed(2)}%`}
                         </p>
                       </div>
                       <div className="flex space-x-1 flex-shrink-0 ml-2">

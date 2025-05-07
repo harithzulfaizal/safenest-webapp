@@ -31,7 +31,7 @@ export const AddEditDebtModal = ({ isOpen, onClose, debt, onSaveSuccess }) => {
           // debt.amount is already a number from FinancialProfile transformation
           current_balance: debt.amount ? String(debt.amount) : '',
           // debt.interest_rate is decimal from API (e.g., 0.18), convert to percentage string for input
-          interest_rate: debt.interest_rate ? String(parseFloat(debt.interest_rate) * 100) : '',
+          interest_rate: debt.interest_rate ? String(parseFloat(debt.interest_rate)) : '',
           // min_monthly_payment might not be directly on `debt` object from FinancialProfile,
           // it would be part of the raw debt data if available. Assuming it's not for now or needs fetching.
           // For now, if it's not there, it will be an empty string.
@@ -68,7 +68,7 @@ export const AddEditDebtModal = ({ isOpen, onClose, debt, onSaveSuccess }) => {
       ...formData,
       current_balance: parseFloat(formData.current_balance) || 0,
       // Convert interest rate from percentage string (e.g., "18.5") to decimal (e.g., 0.185) for API
-      interest_rate: formData.interest_rate ? (parseFloat(formData.interest_rate) / 100) : null,
+      interest_rate: formData.interest_rate ? (parseFloat(formData.interest_rate)) : null,
       min_monthly_payment: parseFloat(formData.min_monthly_payment) || null, // API might allow null
     };
 
