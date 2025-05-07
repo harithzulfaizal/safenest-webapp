@@ -1,32 +1,65 @@
 // src/context/AuthContext.jsx
 // Manages authentication state and basic authenticated user info
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext();
+const AUTH_STORAGE_KEY = 'safeNestAuthData'; // Key for localStorage
 
 export const AuthProvider = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  // Store basic info of the authenticated user (e.g., id, email from login response)
-  const [authenticatedUser, setAuthenticatedUser] = useState(null); // e.g., { userId: 1, email: 'user@example.com' }
+  const [authenticatedUser, setAuthenticatedUser] = useState(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true); // To track initial auth check
 
-  // Modified login function to accept user data from the login API response
+  useEffect(() => {
+    // Check localStorage for existing auth data on initial load
+    try {
+      const storedAuthData = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (storedAuthData) {
+        const authData = JSON.parse(storedAuthData);
+        if (authData && authData.userId && authData.email) {
+          setAuthenticatedUser(authData);
+          setIsLoggedIn(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error reading auth data from localStorage:", error);
+      // Clear potentially corrupted data
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+    setIsLoadingAuth(false); // Finished initial auth check
+  }, []);
+
   const login = (userData) => {
     // userData is expected to be an object like { userId: ..., email: ... }
-    // This should come from the /auth/login API response
-    setAuthenticatedUser(userData);
-    setIsLoggedIn(true);
+    if (userData && userData.userId && userData.email) {
+      setAuthenticatedUser(userData);
+      setIsLoggedIn(true);
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(userData));
+      } catch (error) {
+        console.error("Error saving auth data to localStorage:", error);
+      }
+    } else {
+      console.warn("Login attempt with invalid userData:", userData);
+    }
   };
 
   const logout = () => {
     setIsLoggedIn(false);
-    setAuthenticatedUser(null); // Clear user info on logout
+    setAuthenticatedUser(null);
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (error) {
+      console.error("Error removing auth data from localStorage:", error);
+    }
   };
 
   const value = {
     isLoggedIn,
-    authenticatedUser, // Provide authenticatedUser to consumers
+    authenticatedUser,
     login,
-    logout
+    logout,
+    isLoadingAuth, // Expose loading state for initial auth check
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
