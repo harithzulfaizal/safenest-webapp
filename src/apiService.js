@@ -15,11 +15,16 @@ const handleApiResponse = async (response, operationDesc) => {
     console.error(`API Error during ${operationDesc}:`, errorData);
     throw new Error(`Failed to ${operationDesc}: ${response.status} - ${errorData.detail || 'Unknown API error'}`);
   }
-  // For 204 No Content or other success statuses without a body
   if (response.status === 204 || response.headers.get("content-length") === "0") {
-    return {}; // Return an empty object or a specific success indicator
+    return {};
   }
-  return await response.json();
+  try {
+    return await response.json();
+  } catch (e) {
+    // Handle cases where response is OK but not JSON (e.g. plain text confirmation)
+    console.warn(`Response for ${operationDesc} was not JSON. Status: ${response.status}`);
+    return { success: true, status: response.status, message: `Operation ${operationDesc} successful but no JSON content returned.` };
+  }
 };
 
 
@@ -46,24 +51,15 @@ export const fetchComprehensiveUserDetailsAPI = async (userId) => {
  * Updates a user's profile.
  * @param {number} userId The ID of the user.
  * @param {object} profileData The profile data to update.
- * Expected fields in profileData: age, num_children, marital_status, retirement_status, goals (as an object).
  * @returns {Promise<object>} The updated user profile from the API.
- * @throws {Error} If the API request fails.
  */
 export const updateUserProfileAPI = async (userId, profileData) => {
-  if (!userId) {
-    throw new Error("User ID is required to update profile.");
-  }
-  if (!profileData) {
-    throw new Error("Profile data is required.");
-  }
-
+  if (!userId) throw new Error("User ID is required to update profile.");
+  if (!profileData) throw new Error("Profile data is required.");
   try {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/profile`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profileData),
     });
     return await handleApiResponse(response, "update user profile");
@@ -74,13 +70,6 @@ export const updateUserProfileAPI = async (userId, profileData) => {
 };
 
 // --- Debt CRUD Functions ---
-
-/**
- * Creates a new debt detail for a user.
- * @param {number} userId The ID of the user.
- * @param {object} debtData The debt data to create.
- * @returns {Promise<object>} The created debt detail.
- */
 export const createDebtDetailAPI = async (userId, debtData) => {
   if (!userId) throw new Error("User ID is required for creating debt.");
   if (!debtData) throw new Error("Debt data is required.");
@@ -91,35 +80,17 @@ export const createDebtDetailAPI = async (userId, debtData) => {
       body: JSON.stringify(debtData),
     });
     return await handleApiResponse(response, "create debt detail");
-  } catch (error) {
-    console.error("Error in createDebtDetailAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in createDebtDetailAPI:", error); throw error; }
 };
 
-/**
- * Fetches all debt details for a user.
- * @param {number} userId The ID of the user.
- * @returns {Promise<Array<object>>} A list of debt details.
- */
 export const fetchUserDebtsAPI = async (userId) => {
   if (!userId) throw new Error("User ID is required for fetching debts.");
   try {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/debts`);
     return await handleApiResponse(response, "fetch user debts");
-  } catch (error) {
-    console.error("Error in fetchUserDebtsAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in fetchUserDebtsAPI:", error); throw error; }
 };
 
-/**
- * Updates an existing debt detail for a user.
- * @param {number} userId The ID of the user.
- * @param {number} debtId The ID of the debt to update.
- * @param {object} debtData The debt data to update.
- * @returns {Promise<object>} The updated debt detail.
- */
 export const updateDebtDetailAPI = async (userId, debtId, debtData) => {
   if (!userId) throw new Error("User ID is required for updating debt.");
   if (!debtId) throw new Error("Debt ID is required for updating debt.");
@@ -131,18 +102,9 @@ export const updateDebtDetailAPI = async (userId, debtId, debtData) => {
       body: JSON.stringify(debtData),
     });
     return await handleApiResponse(response, "update debt detail");
-  } catch (error) {
-    console.error("Error in updateDebtDetailAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in updateDebtDetailAPI:", error); throw error; }
 };
 
-/**
- * Deletes a debt detail for a user.
- * @param {number} userId The ID of the user.
- * @param {number} debtId The ID of the debt to delete.
- * @returns {Promise<object>} Confirmation of deletion (often empty).
- */
 export const deleteDebtDetailAPI = async (userId, debtId) => {
   if (!userId) throw new Error("User ID is required for deleting debt.");
   if (!debtId) throw new Error("Debt ID is required for deleting debt.");
@@ -150,26 +112,11 @@ export const deleteDebtDetailAPI = async (userId, debtId) => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/debts/${debtId}`, {
       method: 'DELETE',
     });
-    // DELETE might return 204 No Content or an empty object on success
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-        throw new Error(`Failed to delete debt: ${response.status} - ${errorData.detail || 'Unknown error'}`);
-    }
-    return response.status === 204 ? {} : await response.json(); // Handle 204 No Content
-  } catch (error) {
-    console.error("Error in deleteDebtDetailAPI:", error);
-    throw error;
-  }
+    return await handleApiResponse(response, "delete debt detail");
+  } catch (error) { console.error("Error in deleteDebtDetailAPI:", error); throw error; }
 };
 
 // --- Expense CRUD Functions ---
-
-/**
- * Creates a new expense detail for a user.
- * @param {number} userId The ID of the user.
- * @param {object} expenseData The expense data to create.
- * @returns {Promise<object>} The created expense detail.
- */
 export const createExpenseDetailAPI = async (userId, expenseData) => {
   if (!userId) throw new Error("User ID is required for creating expense.");
   if (!expenseData) throw new Error("Expense data is required.");
@@ -180,35 +127,17 @@ export const createExpenseDetailAPI = async (userId, expenseData) => {
       body: JSON.stringify(expenseData),
     });
     return await handleApiResponse(response, "create expense detail");
-  } catch (error) {
-    console.error("Error in createExpenseDetailAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in createExpenseDetailAPI:", error); throw error; }
 };
 
-/**
- * Fetches all expense details for a user.
- * @param {number} userId The ID of the user.
- * @returns {Promise<Array<object>>} A list of expense details.
- */
 export const fetchUserExpensesAPI = async (userId) => {
   if (!userId) throw new Error("User ID is required for fetching expenses.");
   try {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/expenses`);
     return await handleApiResponse(response, "fetch user expenses");
-  } catch (error) {
-    console.error("Error in fetchUserExpensesAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in fetchUserExpensesAPI:", error); throw error; }
 };
 
-/**
- * Updates an existing expense detail for a user.
- * @param {number} userId The ID of the user.
- * @param {number} expenseId The ID of the expense to update.
- * @param {object} expenseData The expense data to update.
- * @returns {Promise<object>} The updated expense detail.
- */
 export const updateExpenseDetailAPI = async (userId, expenseId, expenseData) => {
   if (!userId) throw new Error("User ID is required for updating expense.");
   if (!expenseId) throw new Error("Expense ID is required for updating expense.");
@@ -220,18 +149,9 @@ export const updateExpenseDetailAPI = async (userId, expenseId, expenseData) => 
       body: JSON.stringify(expenseData),
     });
     return await handleApiResponse(response, "update expense detail");
-  } catch (error) {
-    console.error("Error in updateExpenseDetailAPI:", error);
-    throw error;
-  }
+  } catch (error) { console.error("Error in updateExpenseDetailAPI:", error); throw error; }
 };
 
-/**
- * Deletes an expense detail for a user.
- * @param {number} userId The ID of the user.
- * @param {number} expenseId The ID of the expense to delete.
- * @returns {Promise<object>} Confirmation of deletion.
- */
 export const deleteExpenseDetailAPI = async (userId, expenseId) => {
   if (!userId) throw new Error("User ID is required for deleting expense.");
   if (!expenseId) throw new Error("Expense ID is required for deleting expense.");
@@ -239,30 +159,94 @@ export const deleteExpenseDetailAPI = async (userId, expenseId) => {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/expenses/${expenseId}`, {
       method: 'DELETE',
     });
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-        throw new Error(`Failed to delete expense: ${response.status} - ${errorData.detail || 'Unknown error'}`);
-    }
-    return response.status === 204 ? {} : await response.json(); // Handle 204 No Content
+    return await handleApiResponse(response, "delete expense detail");
+  } catch (error) { console.error("Error in deleteExpenseDetailAPI:", error); throw error; }
+};
+
+// --- Financial Knowledge CRUD Functions ---
+
+/**
+ * Adds or updates a financial knowledge entry for a user.
+ * (Corresponds to POST /users/{user_id}/financial_knowledge)
+ * @param {number} userId The ID of the user.
+ * @param {{ category: string, level: number }} knowledgeData The knowledge data.
+ * @returns {Promise<object>} The created or updated financial knowledge entry.
+ */
+export const addOrUpdateUserFinancialKnowledgeAPI = async (userId, knowledgeData) => {
+  if (!userId) throw new Error("User ID is required for financial knowledge.");
+  if (!knowledgeData || !knowledgeData.category || knowledgeData.level === undefined) {
+    throw new Error("Category and level are required for financial knowledge.");
+  }
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/financial_knowledge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(knowledgeData), // API expects { "category": "string", "level": integer }
+    });
+    return await handleApiResponse(response, "add/update financial knowledge");
   } catch (error) {
-    console.error("Error in deleteExpenseDetailAPI:", error);
+    console.error("Error in addOrUpdateUserFinancialKnowledgeAPI:", error);
     throw error;
   }
 };
 
-// Note: Income CRUD functions (createIncomeDetailAPI, etc.) can be added here following the same pattern if needed.
-// Example for creating an income detail:
-/*
-export const createIncomeDetailAPI = async (userId, incomeData) => {
-  const response = await fetch(`${API_BASE_URL}/users/${userId}/income`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(incomeData),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-    throw new Error(`Failed to create income detail: ${response.status} - ${errorData.detail}`);
+/**
+ * Updates the level for a specific financial knowledge category for a user.
+ * (Corresponds to PUT /users/{user_id}/financial_knowledge/{category})
+ * @param {number} userId The ID of the user.
+ * @param {string} category The category to update.
+ * @param {{ level: number }} levelData The new level.
+ * @returns {Promise<object>} The updated financial knowledge entry.
+ */
+export const updateUserFinancialKnowledgeLevelAPI = async (userId, category, levelData) => {
+  if (!userId) throw new Error("User ID is required.");
+  if (!category) throw new Error("Category is required to update knowledge level.");
+  if (!levelData || levelData.level === undefined) throw new Error("Level data is required.");
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/financial_knowledge/${encodeURIComponent(category)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(levelData), // API expects { "level": integer }
+    });
+    return await handleApiResponse(response, `update financial knowledge level for ${category}`);
+  } catch (error) {
+    console.error("Error in updateUserFinancialKnowledgeLevelAPI:", error);
+    throw error;
   }
-  return await response.json();
 };
-*/
+
+/**
+ * Removes a financial knowledge category from a user.
+ * (Corresponds to DELETE /users/{user_id}/financial_knowledge/{category})
+ * @param {number} userId The ID of the user.
+ * @param {string} category The category to remove.
+ * @returns {Promise<object>} Confirmation of deletion.
+ */
+export const removeUserFinancialKnowledgeAPI = async (userId, category) => {
+  if (!userId) throw new Error("User ID is required.");
+  if (!category) throw new Error("Category is required to remove knowledge.");
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/financial_knowledge/${encodeURIComponent(category)}`, {
+      method: 'DELETE',
+    });
+    return await handleApiResponse(response, `remove financial knowledge for ${category}`);
+  } catch (error) {
+    console.error("Error in removeUserFinancialKnowledgeAPI:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches all defined financial knowledge categories and their levels/descriptions.
+ * (Corresponds to GET /financial_knowledge_definitions)
+ * @returns {Promise<Array<object>>} A list of financial knowledge definitions.
+ */
+export const fetchFinancialKnowledgeDefinitionsAPI = async () => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/financial_knowledge_definitions`);
+        return await handleApiResponse(response, "fetch financial knowledge definitions");
+    } catch (error) {
+        console.error("Error in fetchFinancialKnowledgeDefinitionsAPI:", error);
+        throw error;
+    }
+};

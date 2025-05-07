@@ -9,31 +9,48 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { EditProfileModal } from '../components/modals/EditProfileModal';
 import { AddEditDebtModal } from '../components/modals/AddEditDebtModal';
+import { AddEditKnowledgeModal } from '../components/modals/AddEditKnowledgeModal'; // Import Knowledge Modal
 import {
   updateUserProfileAPI,
   fetchComprehensiveUserDetailsAPI,
-  deleteDebtDetailAPI
+  deleteDebtDetailAPI,
+  removeUserFinancialKnowledgeAPI // Import knowledge delete API
 } from '../apiService';
-import { Edit, FileText, UserCircle, AlertTriangle } from 'lucide-react'; // Added UserCircle, AlertTriangle
+import { Edit, FileText, UserCircle, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
-// Helper to transform API financial knowledge list to object (copied from UserContext for local refresh)
+// Helper to transform API financial knowledge list to object for UserContext and refresh
 const transformFinancialKnowledgeForRefresh = (knowledgeList) => {
-  if (!knowledgeList || knowledgeList.length === 0) return {};
+  if (!knowledgeList || !Array.isArray(knowledgeList) || knowledgeList.length === 0) return {};
   return knowledgeList.reduce((acc, item) => {
-    const key = item.category.toLowerCase()
-      .replace(/\s*&\s*|\s+/g, (match) => match.trim() === '&' ? 'And' : '')
-      .replace(/^(.)/, c => c.toLowerCase())
-      .replace(/And(.)/, c => c[3].toUpperCase());
+    // Use a consistent key generation strategy.
+    // Example: "Credit & Debt" -> "creditAndDebt"
+    // This should match how keys are expected/used elsewhere if they are transformed.
+    // For simplicity, if the API returns "Credit & Debt", and we use that as a key for display,
+    // then that's fine. The main thing is consistency.
+    // The UserContext's original transform was:
+    // const key = item.category.toLowerCase()
+    //   .replace(/\s*&\s*|\s+/g, (match) => match.trim() === '&' ? 'And' : '')
+    //   .replace(/^(.)/, c => c.toLowerCase())
+    //   .replace(/And(.)/, c => c[3].toUpperCase());
+    // Let's use a simpler approach for the key if possible, or ensure this transformation is applied consistently.
+    // For now, let's assume the 'key' in the FinancialKnowledge component will be the direct category name from API.
+    // The `knowledge` prop passed to `FinancialKnowledge` will have keys like "Budgeting", "Investing".
+    // So, the key in the accumulator should be `item.category`.
+
+    const key = item.category; // Using the direct category name from API as the key.
+
     acc[key] = {
-      level: `Level ${item.level}`,
-      description: item.description,
+      level: `Level ${item.level}`, // API gives level as number
+      description: item.description, // API gives description
+      // Store raw category from API, which is the same as the key in this approach
+      apiCategory: item.category
     };
     return acc;
   }, {});
 };
 
-// Helper to transform API goals object to array (copied from UserContext for local refresh)
+// Helper to transform API goals object to array
 const transformGoalsForRefresh = (apiGoals) => {
   if (!apiGoals || typeof apiGoals !== 'object' || Object.keys(apiGoals).length === 0) {
     return [];
@@ -52,18 +69,19 @@ const transformGoalsForRefresh = (apiGoals) => {
 
 
 export const ProfilePage = () => {
-  const { user, setUser, loading, error: contextError } = useUser(); // Renamed context error
+  const { user, setUser, loading, error: contextError } = useUser();
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState(null);
+  const [selectedKnowledge, setSelectedKnowledge] = useState(null);
   const [modalError, setModalError] = useState(null);
-  const [pageError, setPageError] = useState(null); // New state for page-level errors after initial load
+  const [pageError, setPageError] = useState(null);
 
   const refreshUserData = useCallback(async (userId) => {
     if (!userId) return;
-    setModalError(null); // Clear previous modal-specific errors
-    setPageError(null);  // Clear previous page-level refresh errors
-    // No need to setLoading(true) here as ProfilePage's main loading is from useUser context
+    setModalError(null);
+    setPageError(null);
     try {
       const refreshedData = await fetchComprehensiveUserDetailsAPI(userId);
 
@@ -98,6 +116,10 @@ export const ProfilePage = () => {
           }, {});
         }
       }
+      
+      const knowledgeToTransform = Array.isArray(refreshedData.financial_knowledge) 
+        ? refreshedData.financial_knowledge 
+        : [];
 
       setUser(prevUser => ({
         ...prevUser,
@@ -116,7 +138,7 @@ export const ProfilePage = () => {
           },
         },
         financialGoals: refreshedData.profile?.goals ? transformGoalsForRefresh(refreshedData.profile.goals) : [],
-        financialKnowledge: transformFinancialKnowledgeForRefresh(refreshedData.financial_knowledge),
+        financialKnowledge: transformFinancialKnowledgeForRefresh(knowledgeToTransform),
         financialProfile: {
             ...prevUser.financialProfile,
             netWorth: 'N/A',
@@ -151,17 +173,17 @@ export const ProfilePage = () => {
         _rawIncome: refreshedData.income || prevUser._rawIncome,
         _rawDebts: refreshedData.debts || prevUser._rawDebts,
         _rawExpenses: refreshedData.expenses || prevUser._rawExpenses,
+        _rawFinancialKnowledge: knowledgeToTransform, // Store raw knowledge from API
       }));
     } catch (err) {
       console.error("Failed to refresh user data:", err);
-      setPageError(`Failed to refresh data: ${err.message}. Please try again later.`); // Use setPageError
+      setPageError(`Failed to refresh data: ${err.message}. Please try again later.`);
     }
   }, [setUser]);
 
 
   const handleOpenEditProfileModal = () => {
-    setModalError(null);
-    setPageError(null); // Clear page error when opening modal for a new operation
+    setModalError(null); setPageError(null); 
     setIsEditProfileModalOpen(true);
   };
   const handleCloseEditProfileModal = () => setIsEditProfileModalOpen(false);
@@ -177,113 +199,94 @@ export const ProfilePage = () => {
       await refreshUserData(userId);
       handleCloseEditProfileModal();
     } catch (err) {
-      console.error("Failed to save profile:", err);
-      // Error from updateUserProfileAPI or refreshUserData will be caught
-      // setModalError is good if error is from updateUserProfileAPI directly
-      // If error is from refreshUserData, pageError will be set by refreshUserData
       setModalError(err.message || "An unexpected error occurred while saving profile.");
       throw err; 
     }
   };
 
   const handleOpenAddDebtModal = () => {
-    setSelectedDebt(null);
-    setModalError(null);
-    setPageError(null); // Clear page error
+    setSelectedDebt(null); setModalError(null); setPageError(null); 
     setIsDebtModalOpen(true);
   };
-
   const handleOpenEditDebtModal = (debtToEdit) => {
-    setSelectedDebt(debtToEdit);
-    setModalError(null);
-    setPageError(null); // Clear page error
+    setSelectedDebt(debtToEdit); setModalError(null); setPageError(null); 
     setIsDebtModalOpen(true);
   };
-
   const handleCloseDebtModal = () => {
-    setIsDebtModalOpen(false);
-    setSelectedDebt(null);
+    setIsDebtModalOpen(false); setSelectedDebt(null);
   };
-
-  const handleDebtSaveSuccess = async (savedDebt) => {
-    console.log('Debt saved successfully:', savedDebt);
+  const handleDebtSaveSuccess = async () => {
     handleCloseDebtModal();
-    if (user && user._rawProfile && user._rawProfile.user_id) {
-      await refreshUserData(user._rawProfile.user_id);
-    }
+    if (user?._rawProfile?.user_id) await refreshUserData(user._rawProfile.user_id);
   };
-
   const handleDeleteDebt = async (debtIdToDelete) => {
-    if (!user || !user._rawProfile || !user._rawProfile.user_id) {
-      setPageError("User ID not available. Cannot delete debt."); 
-      return;
+    if (!user?._rawProfile?.user_id) {
+      setPageError("User ID not available."); return;
     }
     const userId = user._rawProfile.user_id;
-
-    if (window.confirm('Are you sure you want to delete this debt account? This action cannot be undone.')) {
+    if (window.confirm('Are you sure you want to delete this debt account?')) {
       try {
         await deleteDebtDetailAPI(userId, debtIdToDelete);
-        console.log(`Debt ${debtIdToDelete} deleted successfully.`);
         await refreshUserData(userId);
-      } catch (err) {
-        console.error("Error deleting debt:", err);
-        setPageError(`Failed to delete debt: ${err.message}`); 
-      }
+      } catch (err) { setPageError(`Failed to delete debt: ${err.message}`); }
     }
   };
 
-  // Display loading if context is loading
-  if (loading) { // `loading` is from useUser()
-    return (
-      <Card>
-        <CardContent className="flex justify-center items-center h-48">
-          <p className="text-gray-600 dark:text-gray-400">Loading profile data...</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  // --- Financial Knowledge Modal Handlers ---
+  const handleOpenAddKnowledgeModal = () => {
+    setSelectedKnowledge(null); setModalError(null); setPageError(null);
+    setIsKnowledgeModalOpen(true);
+  };
 
-  // Display error from context (initial load error)
+  const handleOpenEditKnowledgeModal = (knowledgeToEdit) => {
+    // knowledgeToEdit comes from FinancialKnowledge.jsx as { category: "OriginalAPICategoryName", level: "Level X", ... }
+    // The modal expects `category` to be the original API category name.
+    setSelectedKnowledge(knowledgeToEdit); 
+    setModalError(null); setPageError(null);
+    setIsKnowledgeModalOpen(true);
+  };
+
+  const handleCloseKnowledgeModal = () => {
+    setIsKnowledgeModalOpen(false); setSelectedKnowledge(null);
+  };
+
+  const handleKnowledgeSaveSuccess = async () => {
+    handleCloseKnowledgeModal();
+    if (user?._rawProfile?.user_id) await refreshUserData(user._rawProfile.user_id);
+  };
+
+  const handleDeleteKnowledge = async (categoryKeyToDelete) => {
+    // categoryKeyToDelete is the key from the user.financialKnowledge object,
+    // which should be the original API category name if transformFinancialKnowledgeForRefresh uses item.category as key.
+    if (!user?._rawProfile?.user_id) {
+      setPageError("User ID not available."); return;
+    }
+    const userId = user._rawProfile.user_id;
+    
+    // The `categoryKeyToDelete` should be the direct API category name.
+    const apiCategoryName = categoryKeyToDelete; 
+
+    if (window.confirm(`Are you sure you want to remove knowledge for "${apiCategoryName}"?`)) {
+      try {
+        await removeUserFinancialKnowledgeAPI(userId, apiCategoryName);
+        await refreshUserData(userId);
+      } catch (err) { setPageError(`Failed to remove knowledge for "${apiCategoryName}": ${err.message}`); }
+    }
+  };
+  // --- End Financial Knowledge Modal Handlers ---
+
+
+  if (loading) {
+    return <Card><CardContent className="flex justify-center items-center h-48"><p className="text-gray-600 dark:text-gray-400">Loading profile data...</p></CardContent></Card>;
+  }
   if (contextError) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col justify-center items-center h-48 p-6">
-           <AlertTriangle size={48} className="text-red-500 dark:text-red-400 mb-4" />
-           <p className="text-red-600 dark:text-red-400 font-semibold text-lg">Error Loading Profile</p>
-          <p className="text-red-500 dark:text-red-300 text-sm mt-2 text-center">{contextError}</p>
-        </CardContent>
-      </Card>
-    );
+    return <Card><CardContent className="flex flex-col justify-center items-center h-48 p-6"><AlertTriangle size={48} className="text-red-500 dark:text-red-400 mb-4" /><p className="text-red-600 dark:text-red-400 font-semibold text-lg">Error Loading Profile</p><p className="text-red-500 dark:text-red-300 text-sm mt-1 text-center">{contextError}</p></CardContent></Card>;
   }
-  
-  // Display page-level error (e.g., from refresh failure)
-  // This will show if contextError is null but pageError is set
   if (pageError) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col justify-center items-center h-48 p-6">
-           <AlertTriangle size={48} className="text-orange-500 dark:text-orange-400 mb-4" />
-           <p className="text-orange-600 dark:text-orange-400 font-semibold text-lg">Profile Update Issue</p>
-           <p className="text-orange-500 dark:text-orange-300 text-sm mt-2 text-center">{pageError}</p>
-            <Button onClick={() => refreshUserData(user?._rawProfile?.user_id)} className="mt-4">
-                Try to Refresh Data
-            </Button>
-        </CardContent>
-      </Card>
-    );
+    return <Card><CardContent className="flex flex-col justify-center items-center h-48 p-6"><AlertTriangle size={48} className="text-orange-500 dark:text-orange-400 mb-4" /><p className="text-orange-600 dark:text-orange-400 font-semibold text-lg">Profile Update Issue</p><p className="text-orange-500 dark:text-orange-300 text-sm mt-1 text-center">{pageError}</p><Button onClick={() => refreshUserData(user?._rawProfile?.user_id)} className="mt-4">Try Refresh</Button></CardContent></Card>;
   }
-
-
   if (!user || !user.personalDetails || !user.financialProfile) {
-    return (
-      <Card>
-        <CardContent className="py-12 flex flex-col items-center justify-center">
-            <UserCircle size={48} className="text-gray-400 dark:text-gray-500 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Profile Data Not Available</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-1">User profile data could not be loaded or is incomplete.</p>
-        </CardContent>
-    </Card>
-    );
+    return <Card><CardContent className="py-12 flex flex-col items-center"><UserCircle size={48} className="text-gray-400 dark:text-gray-500 mb-4" /><h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Profile Data Not Available</h3><p className="text-gray-500 dark:text-gray-400 mt-1">User data could not be loaded.</p></CardContent></Card>;
   }
 
   const { personalDetails, financialGoals, financialKnowledge, financialProfile } = user;
@@ -297,12 +300,9 @@ export const ProfilePage = () => {
         </Button>
       </div>
 
-      {modalError && ( // For errors directly from modal operations before refresh
+      {modalError && (
         <Card className="mb-4 border-red-500 bg-red-50 dark:bg-red-900/20">
-            <CardContent className="p-3">
-                <p className="text-red-700 dark:text-red-300 text-sm font-medium">Operation Error:</p>
-                <p className="text-red-600 dark:text-red-400 text-sm">{modalError}</p>
-            </CardContent>
+            <CardContent className="p-3"><p className="text-red-700 dark:text-red-300 text-sm font-medium">Operation Error: {modalError}</p></CardContent>
         </Card>
       )}
 
@@ -322,7 +322,14 @@ export const ProfilePage = () => {
           onDeleteDebt={handleDeleteDebt}
         />
       )}
-      {financialKnowledge && Object.keys(financialKnowledge).length > 0 && <FinancialKnowledge knowledge={financialKnowledge} />}
+      {financialKnowledge && (
+        <FinancialKnowledge
+            knowledge={financialKnowledge} // This object has keys like "Budgeting", "Investing"
+            onAdd={handleOpenAddKnowledgeModal}
+            onEdit={handleOpenEditKnowledgeModal} // Expects { category: "API Category Name", level: "Level X", ... }
+            onDelete={handleDeleteKnowledge}   // Expects the key from financialKnowledge (API Category Name)
+        />
+      )}
 
       <EditProfileModal
         isOpen={isEditProfileModalOpen}
@@ -330,12 +337,17 @@ export const ProfilePage = () => {
         currentUserData={user._rawProfile || {}}
         onSave={handleSaveUserProfile}
       />
-
       <AddEditDebtModal
         isOpen={isDebtModalOpen}
         onClose={handleCloseDebtModal}
         debt={selectedDebt}
         onSaveSuccess={handleDebtSaveSuccess}
+      />
+      <AddEditKnowledgeModal
+        isOpen={isKnowledgeModalOpen}
+        onClose={handleCloseKnowledgeModal}
+        knowledgeItem={selectedKnowledge}
+        onSaveSuccess={handleKnowledgeSaveSuccess}
       />
     </div>
   );

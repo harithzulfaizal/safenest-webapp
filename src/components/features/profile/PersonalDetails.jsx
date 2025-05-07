@@ -12,7 +12,7 @@ export const PersonalDetails = ({ personalDetails, financialGoals, onEditProfile
   return (
     <Card>
       <CardHeader className="flex flex-row justify-between items-center">
-        <CardTitle icon={UserIconLucide}>Personal & Financial Snapshot</CardTitle>
+        <CardTitle icon={UserIconLucide}>Personal Details</CardTitle>
         {onEditProfileAndGoals && (
             <Button variant="outline" size="sm" onClick={onEditProfileAndGoals}>
                 Edit Details & Goals
