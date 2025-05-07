@@ -9,12 +9,14 @@ import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { EditProfileModal } from '../components/modals/EditProfileModal';
 import { AddEditDebtModal } from '../components/modals/AddEditDebtModal';
-import { AddEditKnowledgeModal } from '../components/modals/AddEditKnowledgeModal'; // Import Knowledge Modal
+import { AddEditKnowledgeModal } from '../components/modals/AddEditKnowledgeModal';
+import { AddEditIncomeModal } from '../components/modals/AddEditIncomeModal'; // Import Income Modal
 import {
   updateUserProfileAPI,
   fetchComprehensiveUserDetailsAPI,
   deleteDebtDetailAPI,
-  removeUserFinancialKnowledgeAPI // Import knowledge delete API
+  removeUserFinancialKnowledgeAPI,
+  deleteIncomeDetailAPI, // Import income delete API
 } from '../apiService';
 import { Edit, FileText, UserCircle, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
@@ -23,27 +25,10 @@ import { formatCurrency } from '../utils/formatters';
 const transformFinancialKnowledgeForRefresh = (knowledgeList) => {
   if (!knowledgeList || !Array.isArray(knowledgeList) || knowledgeList.length === 0) return {};
   return knowledgeList.reduce((acc, item) => {
-    // Use a consistent key generation strategy.
-    // Example: "Credit & Debt" -> "creditAndDebt"
-    // This should match how keys are expected/used elsewhere if they are transformed.
-    // For simplicity, if the API returns "Credit & Debt", and we use that as a key for display,
-    // then that's fine. The main thing is consistency.
-    // The UserContext's original transform was:
-    // const key = item.category.toLowerCase()
-    //   .replace(/\s*&\s*|\s+/g, (match) => match.trim() === '&' ? 'And' : '')
-    //   .replace(/^(.)/, c => c.toLowerCase())
-    //   .replace(/And(.)/, c => c[3].toUpperCase());
-    // Let's use a simpler approach for the key if possible, or ensure this transformation is applied consistently.
-    // For now, let's assume the 'key' in the FinancialKnowledge component will be the direct category name from API.
-    // The `knowledge` prop passed to `FinancialKnowledge` will have keys like "Budgeting", "Investing".
-    // So, the key in the accumulator should be `item.category`.
-
-    const key = item.category; // Using the direct category name from API as the key.
-
+    const key = item.category; 
     acc[key] = {
-      level: `Level ${item.level}`, // API gives level as number
-      description: item.description, // API gives description
-      // Store raw category from API, which is the same as the key in this approach
+      level: `Level ${item.level}`, 
+      description: item.description, 
       apiCategory: item.category
     };
     return acc;
@@ -72,8 +57,10 @@ export const ProfilePage = () => {
   const { user, setUser, loading, error: contextError } = useUser();
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false); // State for Income Modal
   const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState(null);
+  const [selectedIncome, setSelectedIncome] = useState(null); // State for selected income to edit
   const [selectedKnowledge, setSelectedKnowledge] = useState(null);
   const [modalError, setModalError] = useState(null);
   const [pageError, setPageError] = useState(null);
@@ -120,6 +107,9 @@ export const ProfilePage = () => {
       const knowledgeToTransform = Array.isArray(refreshedData.financial_knowledge) 
         ? refreshedData.financial_knowledge 
         : [];
+      
+      // Calculate total monthly income for personalDetails.netHouseholdIncome
+      const totalRawMonthlyIncome = refreshedData.income?.reduce((sum, item) => sum + parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g,"")), 0) || 0;
 
       setUser(prevUser => ({
         ...prevUser,
@@ -128,9 +118,7 @@ export const ProfilePage = () => {
         personalDetails: {
           ...prevUser.personalDetails,
           age: refreshedData.profile?.age || 'N/A', 
-          netHouseholdIncome: refreshedData.income && refreshedData.income.length > 0
-            ? formatCurrency(refreshedData.income.reduce((sum, item) => sum + parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g,"")), 0)) + ' monthly'
-            : 'N/A',
+          netHouseholdIncome: totalRawMonthlyIncome > 0 ? formatCurrency(totalRawMonthlyIncome) + ' monthly' : 'N/A', // Updated to use raw income
           employmentStatus: refreshedData.profile?.retirement_status || prevUser.personalDetails.employmentStatus,
           householdComposition: {
             ...prevUser.personalDetails.householdComposition,
@@ -170,10 +158,10 @@ export const ProfilePage = () => {
             },
         },
         _rawProfile: refreshedData.profile,
-        _rawIncome: refreshedData.income || prevUser._rawIncome,
+        _rawIncome: refreshedData.income || prevUser._rawIncome, // Ensure _rawIncome is updated
         _rawDebts: refreshedData.debts || prevUser._rawDebts,
         _rawExpenses: refreshedData.expenses || prevUser._rawExpenses,
-        _rawFinancialKnowledge: knowledgeToTransform, // Store raw knowledge from API
+        _rawFinancialKnowledge: knowledgeToTransform,
       }));
     } catch (err) {
       console.error("Failed to refresh user data:", err);
@@ -232,6 +220,36 @@ export const ProfilePage = () => {
     }
   };
 
+  // --- Income Modal Handlers ---
+  const handleOpenAddIncomeModal = () => {
+    setSelectedIncome(null); setModalError(null); setPageError(null);
+    setIsIncomeModalOpen(true);
+  };
+  const handleOpenEditIncomeModal = (incomeToEdit) => {
+    setSelectedIncome(incomeToEdit); setModalError(null); setPageError(null);
+    setIsIncomeModalOpen(true);
+  };
+  const handleCloseIncomeModal = () => {
+    setIsIncomeModalOpen(false); setSelectedIncome(null);
+  };
+  const handleIncomeSaveSuccess = async () => {
+    handleCloseIncomeModal();
+    if (user?._rawProfile?.user_id) await refreshUserData(user._rawProfile.user_id);
+  };
+  const handleDeleteIncome = async (incomeIdToDelete) => {
+    if (!user?._rawProfile?.user_id) {
+      setPageError("User ID not available."); return;
+    }
+    const userId = user._rawProfile.user_id;
+    if (window.confirm('Are you sure you want to delete this income source?')) {
+      try {
+        await deleteIncomeDetailAPI(userId, incomeIdToDelete);
+        await refreshUserData(userId);
+      } catch (err) { setPageError(`Failed to delete income: ${err.message}`); }
+    }
+  };
+  // --- End Income Modal Handlers ---
+
   // --- Financial Knowledge Modal Handlers ---
   const handleOpenAddKnowledgeModal = () => {
     setSelectedKnowledge(null); setModalError(null); setPageError(null);
@@ -239,8 +257,6 @@ export const ProfilePage = () => {
   };
 
   const handleOpenEditKnowledgeModal = (knowledgeToEdit) => {
-    // knowledgeToEdit comes from FinancialKnowledge.jsx as { category: "OriginalAPICategoryName", level: "Level X", ... }
-    // The modal expects `category` to be the original API category name.
     setSelectedKnowledge(knowledgeToEdit); 
     setModalError(null); setPageError(null);
     setIsKnowledgeModalOpen(true);
@@ -256,14 +272,10 @@ export const ProfilePage = () => {
   };
 
   const handleDeleteKnowledge = async (categoryKeyToDelete) => {
-    // categoryKeyToDelete is the key from the user.financialKnowledge object,
-    // which should be the original API category name if transformFinancialKnowledgeForRefresh uses item.category as key.
     if (!user?._rawProfile?.user_id) {
       setPageError("User ID not available."); return;
     }
     const userId = user._rawProfile.user_id;
-    
-    // The `categoryKeyToDelete` should be the direct API category name.
     const apiCategoryName = categoryKeyToDelete; 
 
     if (window.confirm(`Are you sure you want to remove knowledge for "${apiCategoryName}"?`)) {
@@ -289,15 +301,15 @@ export const ProfilePage = () => {
     return <Card><CardContent className="py-12 flex flex-col items-center"><UserCircle size={48} className="text-gray-400 dark:text-gray-500 mb-4" /><h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Profile Data Not Available</h3><p className="text-gray-500 dark:text-gray-400 mt-1">User data could not be loaded.</p></CardContent></Card>;
   }
 
-  const { personalDetails, financialGoals, financialKnowledge, financialProfile } = user;
+  const { personalDetails, financialGoals, financialKnowledge, financialProfile, _rawIncome } = user;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your Dashboard</h1>
-        <Button variant="secondary" onClick={handleOpenEditProfileModal} icon={Edit} className="mt-4 sm:mt-0">
+        {/* <Button variant="secondary" onClick={handleOpenEditProfileModal} icon={Edit} className="mt-4 sm:mt-0">
           Edit Profile & Goals
-        </Button>
+        </Button> */}
       </div>
 
       {modalError && (
@@ -309,8 +321,12 @@ export const ProfilePage = () => {
       {personalDetails && (
         <PersonalDetails
             personalDetails={personalDetails}
+            incomeSources={_rawIncome || []} // Pass raw income data
             financialGoals={financialGoals}
             onEditProfileAndGoals={handleOpenEditProfileModal}
+            onAddIncome={handleOpenAddIncomeModal}
+            onEditIncome={handleOpenEditIncomeModal}
+            onDeleteIncome={handleDeleteIncome}
         />
       )}
       
@@ -324,10 +340,10 @@ export const ProfilePage = () => {
       )}
       {financialKnowledge && (
         <FinancialKnowledge
-            knowledge={financialKnowledge} // This object has keys like "Budgeting", "Investing"
+            knowledge={financialKnowledge}
             onAdd={handleOpenAddKnowledgeModal}
-            onEdit={handleOpenEditKnowledgeModal} // Expects { category: "API Category Name", level: "Level X", ... }
-            onDelete={handleDeleteKnowledge}   // Expects the key from financialKnowledge (API Category Name)
+            onEdit={handleOpenEditKnowledgeModal}
+            onDelete={handleDeleteKnowledge}   
         />
       )}
 
@@ -342,6 +358,12 @@ export const ProfilePage = () => {
         onClose={handleCloseDebtModal}
         debt={selectedDebt}
         onSaveSuccess={handleDebtSaveSuccess}
+      />
+      <AddEditIncomeModal
+        isOpen={isIncomeModalOpen}
+        onClose={handleCloseIncomeModal}
+        income={selectedIncome}
+        onSaveSuccess={handleIncomeSaveSuccess}
       />
       <AddEditKnowledgeModal
         isOpen={isKnowledgeModalOpen}

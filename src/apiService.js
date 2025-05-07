@@ -16,12 +16,11 @@ const handleApiResponse = async (response, operationDesc) => {
     throw new Error(`Failed to ${operationDesc}: ${response.status} - ${errorData.detail || 'Unknown API error'}`);
   }
   if (response.status === 204 || response.headers.get("content-length") === "0") {
-    return {};
+    return { success: true, message: `${operationDesc} successful with no content.`}; // Ensure an object is returned for no content
   }
   try {
     return await response.json();
   } catch (e) {
-    // Handle cases where response is OK but not JSON (e.g. plain text confirmation)
     console.warn(`Response for ${operationDesc} was not JSON. Status: ${response.status}`);
     return { success: true, status: response.status, message: `Operation ${operationDesc} successful but no JSON content returned.` };
   }
@@ -68,6 +67,78 @@ export const updateUserProfileAPI = async (userId, profileData) => {
     throw error;
   }
 };
+
+// --- Income CRUD Functions ---
+/**
+ * Creates a new income source for a user.
+ * @param {number} userId The ID of the user.
+ * @param {object} incomeData The income data to create.
+ * @returns {Promise<object>} The created income detail from the API.
+ */
+export const createIncomeDetailAPI = async (userId, incomeData) => {
+    if (!userId) throw new Error("User ID is required for creating income.");
+    if (!incomeData) throw new Error("Income data is required.");
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/${userId}/income`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(incomeData),
+        });
+        return await handleApiResponse(response, "create income detail");
+    } catch (error) { console.error("Error in createIncomeDetailAPI:", error); throw error; }
+};
+
+/**
+ * Fetches all income sources for a user.
+ * @param {number} userId The ID of the user.
+ * @returns {Promise<Array<object>>} A list of income details.
+ */
+export const fetchUserIncomeAPI = async (userId) => {
+    if (!userId) throw new Error("User ID is required for fetching income.");
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/${userId}/income`);
+        return await handleApiResponse(response, "fetch user income");
+    } catch (error) { console.error("Error in fetchUserIncomeAPI:", error); throw error; }
+};
+
+/**
+ * Updates an existing income source for a user.
+ * @param {number} userId The ID of the user.
+ * @param {number} incomeId The ID of the income source to update.
+ * @param {object} incomeData The income data to update.
+ * @returns {Promise<object>} The updated income detail from the API.
+ */
+export const updateIncomeDetailAPI = async (userId, incomeId, incomeData) => {
+    if (!userId) throw new Error("User ID is required for updating income.");
+    if (!incomeId) throw new Error("Income ID is required for updating income.");
+    if (!incomeData) throw new Error("Income data is required.");
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/${userId}/income/${incomeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(incomeData),
+        });
+        return await handleApiResponse(response, "update income detail");
+    } catch (error) { console.error("Error in updateIncomeDetailAPI:", error); throw error; }
+};
+
+/**
+ * Deletes an income source for a user.
+ * @param {number} userId The ID of the user.
+ * @param {number} incomeId The ID of the income source to delete.
+ * @returns {Promise<object>} Confirmation of deletion.
+ */
+export const deleteIncomeDetailAPI = async (userId, incomeId) => {
+    if (!userId) throw new Error("User ID is required for deleting income.");
+    if (!incomeId) throw new Error("Income ID is required for deleting income.");
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/${userId}/income/${incomeId}`, {
+            method: 'DELETE',
+        });
+        return await handleApiResponse(response, "delete income detail");
+    } catch (error) { console.error("Error in deleteIncomeDetailAPI:", error); throw error; }
+};
+
 
 // --- Debt CRUD Functions ---
 export const createDebtDetailAPI = async (userId, debtData) => {

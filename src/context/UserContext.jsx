@@ -9,15 +9,15 @@ const UserContext = createContext();
 
 // Helper to transform API financial knowledge list to object
 const transformFinancialKnowledge = (knowledgeList) => {
-  if (!knowledgeList || knowledgeList.length === 0) return {};
+  if (!knowledgeList || !Array.isArray(knowledgeList) || knowledgeList.length === 0) return {}; // Ensure it's an array
   return knowledgeList.reduce((acc, item) => {
-    const key = item.category.toLowerCase()
-      .replace(/\s*&\s*|\s+/g, (match) => match.trim() === '&' ? 'And' : '')
-      .replace(/^(.)/, c => c.toLowerCase())
-      .replace(/And(.)/, c => c[3].toUpperCase());
-    acc[key] = {
-      level: `Level ${item.level}`,
-      description: item.description,
+    // Using item.category directly as the key, as API returns it this way.
+    // This key will be used by FinancialKnowledge component.
+    const key = item.category; 
+    acc[key] = { // Changed from a more complex key generation
+      level: `Level ${item.level}`, // API returns level as integer
+      description: item.description, // API returns description
+      apiCategory: item.category, // Store original category name for API calls if needed
     };
     return acc;
   }, {});
@@ -29,15 +29,13 @@ const transformGoals = (apiGoals) => {
     return [];
   }
   return Object.entries(apiGoals).map(([key, value]) => {
-    // Handle cases where value might be a string (older format) or an object
     if (typeof value === 'object' && value.title && value.description) {
       return { id: key, title: value.title, description: value.description };
     }
-    if (typeof value === 'string') { // For backward compatibility or simpler goal structures
+    if (typeof value === 'string') { 
         const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         return { id: key, title: title, description: value };
     }
-    // Fallback for any other unexpected structure
     return { id: key, title: "Goal Detail", description: String(value) };
   });
 };
@@ -49,8 +47,8 @@ export const UserProvider = ({ children }) => {
     memberSince: '2023-01-15',
     accountType: 'Premium',
     personalDetails: {
-      age: 'N/A', // Added age
-      netHouseholdIncome: 'N/A',
+      age: 'N/A', 
+      netHouseholdIncome: 'N/A', // This will be calculated from _rawIncome
       employmentStatus: 'N/A',
       householdComposition: { dependentAdults: 0, dependentChildren: 0 },
       emergencyFundSavingsLevel: 'N/A',
@@ -75,10 +73,11 @@ export const UserProvider = ({ children }) => {
       },
       savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' },
     },
-    _rawProfile: null, // Initialize as null
-    _rawIncome: [],
+    _rawProfile: null, 
+    _rawIncome: [], // Will store the raw income objects from API
     _rawDebts: [],
     _rawExpenses: [],
+    _rawFinancialKnowledge: [], // Store raw knowledge for consistency
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -100,6 +99,12 @@ export const UserProvider = ({ children }) => {
           throw new Error(`Failed to fetch user data: ${response.status} - ${errorData.detail}`);
         }
         const data = await response.json();
+
+        // Calculate total monthly income from the raw income data
+        const totalRawMonthlyIncome = data.income?.reduce((sum, item) => {
+            const incomeVal = parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g,""));
+            return sum + (isNaN(incomeVal) ? 0 : incomeVal);
+        }, 0) || 0;
 
         let expenseSummaryForLatestMonth = {};
         let latestMonthForSummary = null;
@@ -137,30 +142,33 @@ export const UserProvider = ({ children }) => {
             acc[category] = (acc[category] || 0) + (isNaN(amount) ? 0 : amount);
             return acc;
           }, {}) : {};
+        
+        // Ensure financial_knowledge is an array before transforming
+        const knowledgeToTransform = Array.isArray(data.financial_knowledge) 
+            ? data.financial_knowledge 
+            : [];
 
         setUser({
           name: data.profile?.name || user.name,
           email: data.profile?.email || user.email,
-          memberSince: user.memberSince, // Assuming this doesn't come from API or is static
-          accountType: user.accountType, // Assuming this doesn't come from API or is static
+          memberSince: user.memberSince, 
+          accountType: user.accountType, 
           personalDetails: {
-            age: data.profile?.age || 'N/A', // Populate age
-            netHouseholdIncome: data.income && data.income.length > 0
-              ? formatCurrency(data.income.reduce((sum, item) => sum + parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g,"")), 0)) + ' monthly'
-              : 'N/A',
+            age: data.profile?.age || 'N/A', 
+              netHouseholdIncome: totalRawMonthlyIncome > 0 ? formatCurrency(totalRawMonthlyIncome) + ' monthly' : 'N/A',
             employmentStatus: data.profile?.retirement_status || "N/A",
             householdComposition: {
-              dependentAdults: 0, // Assuming not in API, or needs mapping
+              dependentAdults: 0, 
               dependentChildren: data.profile?.num_children || 0,
             },
-            emergencyFundSavingsLevel: 'N/A', // Needs calculation or API field
+            emergencyFundSavingsLevel: 'N/A', 
           },
           financialGoals: data.profile?.goals ? transformGoals(data.profile.goals) : [],
-          financialKnowledge: transformFinancialKnowledge(data.financial_knowledge),
+          financialKnowledge: transformFinancialKnowledge(knowledgeToTransform),
           financialProfile: {
-            netWorth: 'N/A', // Needs calculation
-            assets: 'N/A', // Needs calculation
-            savingsAmount: 'N/A', // Needs calculation or direct API field
+            netWorth: 'N/A', 
+            assets: 'N/A', 
+            savingsAmount: 'N/A', 
             liabilities: data.debts && data.debts.length > 0
               ? formatCurrency(data.debts.reduce((sum, item) => sum + parseFloat(String(item.current_balance || '0').replace(/[^0-9.-]+/g,"")), 0))
               : formatCurrency(0),
@@ -172,25 +180,26 @@ export const UserProvider = ({ children }) => {
               id: d.debt_id,
               name: d.account_name || 'N/A',
               amount: parseFloat(String(d.current_balance || '0').replace(/[^0-9.-]+/g,"")),
-              interest_rate: d.interest_rate, // Store as decimal
+              interest_rate: d.interest_rate, 
               min_monthly_payment: d.min_monthly_payment ? parseFloat(String(d.min_monthly_payment || '0').replace(/[^0-9.-]+/g,"")) : null,
             })) : [],
-            dti: 'N/A', // Needs calculation
+            dti: 'N/A', 
             spendingHabit: {
               topCategory: Object.keys(expenseSummaryForLatestMonth).length > 0 ?
                 Object.entries(expenseSummaryForLatestMonth).sort(([, a], [, b]) => b - a)[0][0]
                 : (Object.keys(originalExpenseSummary).length > 0 ? Object.entries(originalExpenseSummary).sort(([, a], [, b]) => b - a)[0][0] : 'N/A'),
-              style: 'N/A', // Needs definition or API field
+              style: 'N/A', 
               expenseSummary: originalExpenseSummary,
               expenseSummaryForLatestMonth: expenseSummaryForLatestMonth,
               latestMonthForSummary: latestMonthForSummary,
             },
-            savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' }, // Needs calculation or API fields
+            savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' }, 
           },
           _rawProfile: data.profile,
-          _rawIncome: data.income || [],
+          _rawIncome: data.income || [], // Store raw income from API
           _rawDebts: data.debts || [],
           _rawExpenses: data.expenses || [],
+          _rawFinancialKnowledge: knowledgeToTransform, // Store raw knowledge from API
         });
       } catch (err) {
         console.error("Error fetching user data:", err);
@@ -201,11 +210,11 @@ export const UserProvider = ({ children }) => {
     };
 
     fetchUserData();
-  }, [isLoggedIn]); // Removed user from dependencies to prevent potential loops with setUser
+  }, [isLoggedIn]); 
 
   const value = {
     user,
-    setUser, // Make sure setUser is provided
+    setUser, 
     loading,
     error,
   };
