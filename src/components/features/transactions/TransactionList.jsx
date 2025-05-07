@@ -1,39 +1,40 @@
+// src/components/features/transactions/TransactionList.jsx
+// Displays a filterable list of transactions
 import React, { useState, useMemo } from 'react';
 import { List, Filter } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../ui/Card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../ui/Table';
-import { Label } from '../../ui/Form';
-import { Select } from '../../ui/Form';
+import { Label, Select } from '../../ui/Form';
 import { formatCurrency } from '../../../utils/formatters';
 
 export const TransactionList = ({ transactions }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Get unique categories from transactions for the filter dropdown
   const categories = useMemo(() => {
+    if (!transactions) return ['all'];
     const uniqueCategories = new Set(transactions.map(tx => tx.category));
-    return ['all', ...Array.from(uniqueCategories)]; // Add 'all' option
+    return ['all', ...Array.from(uniqueCategories)];
   }, [transactions]);
 
-  // Filter transactions based on selected category
   const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
     if (selectedCategory === 'all') {
       return transactions;
     }
     return transactions.filter(tx => tx.category === selectedCategory);
   }, [transactions, selectedCategory]);
 
-  // Handle category selection change
   const handleCategoryChange = (event) => {
     setSelectedCategory(event.target.value);
   };
 
-  // Helper function to determine amount color
   const getAmountColor = (type, amount) => {
     if (type === 'income') return 'text-green-600 dark:text-green-400';
     if (amount < 0) return 'text-red-600 dark:text-red-400';
     return 'text-gray-900 dark:text-white';
   };
+
+  if (!transactions) return <p>Loading transactions...</p>;
 
   return (
     <Card>
@@ -42,8 +43,7 @@ export const TransactionList = ({ transactions }) => {
           <CardTitle icon={List}>Transactions</CardTitle>
           <CardDescription>View and filter your recent expenses, debts, and investments.</CardDescription>
         </div>
-        
-        {/* Filter Dropdown */}
+
         <div className="mt-4 sm:mt-0 flex items-center space-x-2">
           <Filter className="h-4 w-4 text-gray-500 dark:text-gray-400" />
           <Label htmlFor="category-filter" className="mb-0 text-xs">Filter by Category:</Label>
@@ -51,7 +51,7 @@ export const TransactionList = ({ transactions }) => {
             id="category-filter"
             value={selectedCategory}
             onChange={handleCategoryChange}
-            className="w-40"
+            className="w-auto sm:w-40" // Adjusted width for responsiveness
           >
             {categories.map(category => (
               <option key={category} value={category}>
@@ -61,7 +61,7 @@ export const TransactionList = ({ transactions }) => {
           </Select>
         </div>
       </CardHeader>
-      
+
       <CardContent className="p-0">
         <Table>
           <TableHeader>
@@ -83,7 +83,7 @@ export const TransactionList = ({ transactions }) => {
                 </TableCell>
               </TableRow>
             ))}
-            
+
             {filteredTransactions.length === 0 && (
               <TableRow>
                 <TableCell colSpan="4" className="text-center text-gray-500 dark:text-gray-400 py-8">

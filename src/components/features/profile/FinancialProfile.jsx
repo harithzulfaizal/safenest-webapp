@@ -1,16 +1,20 @@
+// src/components/features/profile/FinancialProfile.jsx
+// Displays user's overall financial profile summary
 import React from 'react';
 import { Wallet } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/Card';
 import { DetailItem } from '../DetailItem';
 
 export const FinancialProfile = ({ profile }) => {
+  if (!profile) return <p>Loading financial profile...</p>;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle icon={Wallet}>Financial Profile</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <DetailItem label="Net Worth" value={profile.netWorth} />
           <DetailItem label="Assets" value={profile.assets} />
           <DetailItem label="Savings Amount" value={profile.savingsAmount} />
@@ -19,11 +23,11 @@ export const FinancialProfile = ({ profile }) => {
           <DetailItem label="Debt-to-Income" value={profile.dti} />
         </div>
         <hr className="my-4 border-gray-200 dark:border-gray-700" />
-        <div className="grid grid-cols-2 gap-4">
-          <DetailItem label="Top Spending Category" value={profile.spendingHabit.topCategory} />
-          <DetailItem label="Spending Style" value={profile.spendingHabit.style} />
-          <DetailItem label="Savings Rate" value={profile.savingsHabit.savingsRate} />
-          <DetailItem label="Emergency Fund Status" value={profile.savingsHabit.emergencyFundStatus} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <DetailItem label="Top Spending Category" value={profile.spendingHabit?.topCategory} />
+          <DetailItem label="Spending Style" value={profile.spendingHabit?.style} />
+          <DetailItem label="Savings Rate" value={profile.savingsHabit?.savingsRate} />
+          <DetailItem label="Emergency Fund Status" value={profile.savingsHabit?.emergencyFundStatus} />
         </div>
       </CardContent>
     </Card>

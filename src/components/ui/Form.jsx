@@ -1,3 +1,5 @@
+// src/components/ui/Form.jsx
+// Reusable form components
 import React from 'react';
 
 export const Input = ({ className = '', type = 'text', ...props }) => (

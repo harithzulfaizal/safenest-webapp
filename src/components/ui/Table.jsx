@@ -1,3 +1,5 @@
+// src/components/ui/Table.jsx
+// Reusable table components
 import React from 'react';
 
 export const Table = ({ children, className = '' }) => (

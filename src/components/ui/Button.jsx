@@ -1,3 +1,5 @@
+// src/components/ui/Button.jsx
+// Reusable button component
 import React from 'react';
 
 export const Button = ({ children, onClick, variant = 'default', className = '', icon: Icon, ...props }) => {
@@ -9,7 +11,7 @@ export const Button = ({ children, onClick, variant = 'default', className = '',
     link: 'text-blue-600 dark:text-blue-400 underline-offset-4 hover:underline',
     destructive: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600',
   };
-  
+
   return (
     <button onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`} {...props}>
       {Icon && <Icon className="mr-2 h-4 w-4" />}

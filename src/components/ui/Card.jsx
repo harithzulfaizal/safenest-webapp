@@ -1,3 +1,5 @@
+// src/components/ui/Card.jsx
+// Reusable card components
 import React from 'react';
 
 export const Card = ({ children, className = '' }) => (

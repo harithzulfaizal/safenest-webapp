@@ -1,3 +1,4 @@
+/* src/styles/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,49 +7,56 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  background-color: #f3f4f6; /* Default light mode background */
 }
 
 /* Dark mode styles */
+.dark body {
+  background-color: #111827; /* Default dark mode background */
+}
+
 .dark {
   color-scheme: dark;
 }
 
-/* Custom scrollbar styles */
+/* Custom scrollbar styles (optional, for consistent look) */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent; /* Or a very light gray for light mode */
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: transparent; /* Or a very dark gray for dark mode */
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 5px;
+  background: #cbd5e1; /* scrollbar color light mode */
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #4b5563; /* scrollbar color dark mode */
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: #9ca3af; /* scrollbar hover color light mode */
 }
-
-/* Dark mode scrollbar */
-.dark ::-webkit-scrollbar-track {
-  background: #2d3748;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #4a5568;
-}
-
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #718096;
+  background: #6b7280; /* scrollbar hover color dark mode */
+}
+
+/* Add Inter font import if not already handled by Tailwind config or index.html */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Ensure html and body take full height for layouts like PageLayout */
+html, body, #root {
+  height: 100%;
 }
