@@ -1,171 +1,62 @@
 // src/pages/InsightsPage.jsx
 // Fetches and displays financial insights for the user
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react'; // Removed useState
 import InsightsList from '../components/features/insights/InsightsList'; // Default import
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useUser } from '../context/UserContext';
 import { AlertTriangle, Info, RefreshCw } from 'lucide-react'; // Added RefreshCw for regenerate button
-import { API_BASE_URL } from '../apiConfig';
+// API_BASE_URL is no longer needed here as logic is in UserContext
 
 export const InsightsPage = () => {
-  const [insights, setInsights] = useState([]);
-  const [loading, setLoading] = useState(true); // For initial load
-  const [regenerating, setRegenerating] = useState(false); // For regeneration process
-  const [error, setError] = useState(null); // For critical errors or warnings
-  const { user, loading: userLoading, error: userError } = useUser();
+  const {
+    user,
+    loading: userLoading, // Renaming to avoid conflict if we had a local 'loading'
+    error: userError,     // Renaming to avoid conflict
+    insights,
+    insightsLoading,
+    insightsRegenerating,
+    insightsError,
+    fetchLatestInsights,
+    handleRegenerateInsights,
+    setInsightsError // To clear the error modal
+  } = useUser();
 
-  // Fetches the LATEST saved insights (GET request)
-  const fetchLatestInsights = useCallback(async (userId, isFallbackAfterRegenError = false) => {
-    if (!regenerating && !isFallbackAfterRegenError) {
-      setLoading(true);
-    }
-    // Don't clear error if this is a fallback, as we want to keep the regeneration error message
-    if (!isFallbackAfterRegenError) {
-        setError(null);
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/insights/latest`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-
-        // If it's a 404 or 500 during initial fetch (not a fallback), treat as "no insights"
-        if ((response.status === 404 || response.status === 500) && !isFallbackAfterRegenError) {
-          console.warn(`Received status ${response.status} from /insights/latest. User may not have insights yet or an unexpected server issue occurred. Treating as no insights available. Response: ${errorText}`);
-          setInsights([]);
-          return;
-        }
-        // If it's an error during fallback, or a different error, throw it to be caught
-        try {
-          const errorData = JSON.parse(errorText);
-          throw new Error(`Failed to fetch latest insights: ${response.status} - ${errorData.detail || 'Unknown API error'}`);
-        } catch (jsonError) {
-          console.error("Non-JSON error response (fetchLatestInsights) for status " + response.status + ":", errorText);
-          const shortErrorText = errorText.length > 100 ? errorText.substring(0, 100) + "..." : errorText;
-          throw new Error(`Failed to fetch latest insights: ${response.status}. Server returned non-JSON response: ${shortErrorText}`);
-        }
-      }
-
-      const data = await response.json();
-      const rawInsightsData = data.insights;
-      const transformedInsights = [];
-
-      if (rawInsightsData && typeof rawInsightsData === 'object' && !Array.isArray(rawInsightsData)) {
-        if (rawInsightsData.debt_insights) {
-          transformedInsights.push({
-            id: data.insight_id ? `debt_${data.insight_id}` : `debt_${Date.now()}`,
-            title: rawInsightsData.debt_insights.financial_goal || "Debt Management Insight",
-            explanation: rawInsightsData.debt_insights.detailed_insight,
-            impact: rawInsightsData.debt_insights.implications,
-            nextSteps: rawInsightsData.debt_insights.recommended_actions
-              ? rawInsightsData.debt_insights.recommended_actions.split('\n').map(s => s.replace(/^-/, '').trim()).filter(s => s.length > 0)
-              : [],
-          });
-        }
-        if (rawInsightsData.savings_insights) {
-          transformedInsights.push({
-            id: data.insight_id ? `savings_${data.insight_id}` : `savings_${Date.now() + 1}`,
-            title: rawInsightsData.savings_insights.financial_goal || "Savings Strategy Insight",
-            explanation: rawInsightsData.savings_insights.detailed_insight,
-            impact: rawInsightsData.savings_insights.implications,
-            nextSteps: rawInsightsData.savings_insights.recommended_actions
-              ? rawInsightsData.savings_insights.recommended_actions.split('\n').map(s => s.replace(/^-/, '').trim()).filter(s => s.length > 0)
-              : [],
-          });
-        }
-      } else if (Array.isArray(rawInsightsData)) {
-         transformedInsights.push(...rawInsightsData.map((insight, index) => ({
-            id: insight.id || `${data.insight_id}_${index}` || `custom_insight_${Date.now() + index}`,
-            title: insight.title || "Financial Insight",
-            explanation: insight.explanation || "No detailed explanation provided.",
-            impact: insight.impact || "Impact not specified.",
-            nextSteps: Array.isArray(insight.nextSteps) ? insight.nextSteps : (typeof insight.nextSteps === 'string' ? insight.nextSteps.split('\n').map(s => s.trim()).filter(s => s) : [])
-        })));
-      }
-      setInsights(transformedInsights);
-      // If this was a successful fallback fetch after a regen error, the error message about regen failure is still shown.
-    } catch (err) {
-      console.error("Error fetching latest insights:", err);
-      // If this is a fallback after regen error, we prioritize the regen error message.
-      // Otherwise, set this fetch error.
-      if (!isFallbackAfterRegenError) {
-        setError(err.message);
-      } else {
-        // If fallback also fails, append to the existing regen error or set a new one.
-         setError(prevError => `${prevError || 'Regeneration failed.'} Additionally, failed to fetch previous insights: ${err.message}`);
-      }
-      setInsights([]); // Clear insights if fetch fails
-    } finally {
-      if (!regenerating && !isFallbackAfterRegenError) {
-        setLoading(false);
-      }
-    }
-  }, [regenerating]);
-
-  // Generates NEW insights (POST request) and then fetches them
-  const handleRegenerateInsights = useCallback(async () => {
-    if (!user || !user._rawProfile || !user._rawProfile.user_id) {
-      setError("User ID not available. Cannot regenerate insights.");
-      return;
-    }
-    const userId = user._rawProfile.user_id;
-    setRegenerating(true);
-    setError(null); // Clear previous errors before regenerating
-    let regenerationFailed = false;
-    let regenErrorMessage = "Insights regeneration failed. Please try again. Showing previously available insights.";
-
-    try {
-      const regenerateResponse = await fetch(`${API_BASE_URL}/users/${userId}/insights/financial_report`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!regenerateResponse.ok) {
-        regenerationFailed = true; // Mark as failed
-        const errorText = await regenerateResponse.text();
-        try {
-          const errorData = JSON.parse(errorText);
-          regenErrorMessage = `Insights regeneration failed (${regenerateResponse.status}): ${errorData.detail || 'Unknown API error'}. Please try again. Showing previously available insights.`;
-        } catch (jsonError) {
-          console.error("Non-JSON error response (handleRegenerateInsights):", errorText);
-          const shortErrorText = errorText.length > 100 ? errorText.substring(0, 100) + "..." : errorText;
-          regenErrorMessage = `Insights regeneration failed (${regenerateResponse.status}): Server returned non-JSON response (${shortErrorText}). Please try again. Showing previously available insights.`;
-        }
-        // Do not throw here, proceed to fetchLatestInsights in finally
-      } else {
-         console.log("Insights regenerated successfully via POST, now fetching latest from DB...");
-      }
-    } catch (err) {
-      // Catch network errors or other unexpected issues during POST
-      regenerationFailed = true;
-      console.error("Error during insight regeneration POST request:", err);
-      regenErrorMessage = `Insights regeneration failed: ${err.message}. Please try again. Showing previously available insights.`;
-    } finally {
-      if (regenerationFailed) {
-        setError(regenErrorMessage); // Set the specific warning message
-      }
-      // Always attempt to fetch latest insights, whether regeneration succeeded or failed
-      await fetchLatestInsights(userId, regenerationFailed);
-      setRegenerating(false);
-    }
-  }, [user, fetchLatestInsights]);
-
+  // Effect to fetch initial insights if not already loaded and user is available
   useEffect(() => {
-    if (!userLoading) {
-      if (userError) {
-        setError(`User context error: ${userError}. Cannot fetch insights.`);
-        setLoading(false);
-      } else if (user && user._rawProfile && user._rawProfile.user_id) {
+    if (!userLoading && !userError && user && user._rawProfile && user._rawProfile.user_id) {
+      // Check if insights are empty and not currently loading/regenerating to avoid redundant calls
+      if (insights.length === 0 && !insightsLoading && !insightsRegenerating && !insightsError) {
         fetchLatestInsights(user._rawProfile.user_id);
-      } else if (!userLoading) {
-        setError("User ID not available. Cannot fetch insights.");
-        setLoading(false);
-        setInsights([]);
+      }
+    } else if (!userLoading && (userError || (!user && !userLoading))) {
+      // Handle cases where user data itself has an error or user is not available
+      // InsightsError might be set by UserContext if user ID is missing for insights
+      if (!insightsError && userError) {
+        setInsightsError(`User data error: ${userError}. Cannot display insights.`);
+      } else if (!insightsError && !user && !userLoading) {
+         setInsightsError("User not available. Cannot display insights.");
       }
     }
-  }, [user, userLoading, userError, fetchLatestInsights]);
+  }, [
+    user, 
+    userLoading, 
+    userError, 
+    insights.length, // Re-run if insights array changes (e.g. after regeneration)
+    insightsLoading, 
+    insightsRegenerating,
+    insightsError, 
+    fetchLatestInsights,
+    setInsightsError // Added setInsightsError
+  ]);
+
+  const onRegenerateClick = useCallback(() => {
+    if (user && user._rawProfile && user._rawProfile.user_id) {
+      handleRegenerateInsights(user._rawProfile.user_id);
+    } else {
+      setInsightsError("User ID not available. Cannot regenerate insights.");
+    }
+  }, [user, handleRegenerateInsights, setInsightsError]);
 
   return (
     <div className="space-y-6">
@@ -173,8 +64,8 @@ export const InsightsPage = () => {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">
           Insights & Recommendations
         </h1>
-        <Button onClick={handleRegenerateInsights} disabled={regenerating || loading} variant="outline" icon={regenerating ? null : RefreshCw}>
-          {regenerating ? (
+        <Button onClick={onRegenerateClick} disabled={insightsRegenerating || insightsLoading || userLoading} variant="outline" icon={insightsRegenerating ? null : RefreshCw}>
+          {insightsRegenerating ? (
             <div className="flex items-center justify-center">
               <svg className="animate-spin -ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -186,19 +77,40 @@ export const InsightsPage = () => {
         </Button>
       </div>
 
-      {/* Display error/warning messages first if they exist, regardless of loading state for insights list */}
-      {error && (
-        <Card className={`border-orange-500 bg-orange-50 dark:bg-orange-900/20`}>
-          <CardContent className="flex flex-col justify-center items-center p-4 text-center">
-            <AlertTriangle size={28} className="text-orange-500 dark:text-orange-400 mb-2" />
-            <p className="text-orange-700 dark:text-orange-300 font-semibold">Notice</p>
-            <p className="text-orange-600 dark:text-orange-400 text-sm mt-1">{error}</p>
-          </CardContent>
-        </Card>
+      {/* Display error/warning messages from UserContext for insights */}
+      {insightsError && (
+        <>
+          {insightsError.startsWith("Insights regeneration failed") ? (
+            // Modal for regeneration failure
+            <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="regenErrorModalTitle" aria-describedby="regenErrorModalDesc">
+              <Card className="border-orange-500 bg-white dark:bg-slate-900 w-full max-w-lg shadow-2xl rounded-lg">
+                <CardContent className="flex flex-col items-center p-6 text-center">
+                  <AlertTriangle size={36} className="text-orange-500 dark:text-orange-400 mb-4" />
+                  <h2 id="regenErrorModalTitle" className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">Insight Regeneration Issue</h2>
+                  <p id="regenErrorModalDesc" className="text-sm text-slate-600 dark:text-slate-300 mb-6">{insightsError}</p> {/* Added mb-6 for spacing */}
+                  <Button onClick={() => setInsightsError(null)} variant="outline" className="w-full sm:w-auto">
+                    Close
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            // Standard error display for other insights errors
+            <Card className="border-red-500 bg-red-50 dark:bg-red-900/30 my-4" role="alert"> {/* Added my-4 for spacing */}
+              <CardContent className="flex items-start p-4"> {/* Changed to items-start for better text alignment with icon */}
+                <AlertTriangle size={24} className="text-red-500 dark:text-red-400 mr-3 flex-shrink-0 mt-1" /> {/* Added mt-1 for alignment */}
+                <div>
+                  <p className="font-semibold text-red-700 dark:text-red-300">Error</p>
+                  <p className="text-sm text-red-600 dark:text-red-400">{insightsError}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
-      {/* Initial Loading State */}
-      {loading && !regenerating && !error && (
+      {/* Initial Loading State for insights */}
+      {insightsLoading && !insightsRegenerating && !insightsError && (
         <Card>
           <CardContent className="flex justify-center items-center h-48">
             <div role="status" className="flex flex-col items-center">
@@ -213,20 +125,21 @@ export const InsightsPage = () => {
       )}
       
       {/* No insights display: shows if not initial loading, no error, no insights, and not currently regenerating */}
-      {!loading && !error && insights.length === 0 && !regenerating && (
+      {!insightsLoading && !insightsError && insights.length === 0 && !insightsRegenerating && (
          <Card>
           <CardContent className="flex flex-col justify-center items-center h-48 p-6 text-center">
             <Info size={32} className="text-blue-500 dark:text-blue-400 mb-3" />
             <p className="text-gray-700 dark:text-gray-300 font-semibold">No Insights Available</p>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-              There are currently no financial insights to display. Try regenerating them.
+              There are currently no financial insights to display. Try regenerating them or check back later.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Insights list: shows if insights exist AND ( (it's not initial loading AND no error) OR it's currently regenerating ) */}
-      {insights.length > 0 && ((!loading && !error) || regenerating) && (
+      {/* Insights list: shows if insights exist AND ( (it's not initial loading AND no insightsError) OR it's currently insightsRegenerating ) */}
+      {/* Also ensures user is loaded and no userError before trying to show list based on insights */}
+      {!userLoading && !userError && insights.length > 0 && ((!insightsLoading && !insightsError) || insightsRegenerating) && (
         <InsightsList insights={insights} />
       )}
     </div>

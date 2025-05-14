@@ -24,6 +24,7 @@ export const AddEditExpenseModal = ({ isOpen, onClose, expense, onSaveSuccess })
     monthly_amount: '', // API expects number or string convertible to number
     description: '',
     timestamp: new Date().toISOString().split('T')[0], // Default to today, YYYY-MM-DD
+    transaction_type: 'OUT', // Default to 'OUT' for expenses
   };
 
   const [formData, setFormData] = useState(initialFormData);
@@ -45,6 +46,7 @@ export const AddEditExpenseModal = ({ isOpen, onClose, expense, onSaveSuccess })
           description: expense.description || '',
           // Assuming expense.date is in 'MM/DD/YYYY' format from TransactionList, convert to 'YYYY-MM-DD'
           timestamp: expense.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          transaction_type: expense.transaction_type || 'OUT', // Set from expense or default
         });
       } else {
         setFormData(initialFormData);
@@ -142,6 +144,23 @@ export const AddEditExpenseModal = ({ isOpen, onClose, expense, onSaveSuccess })
                 {expenseCategories.map(category => (
                   <option key={category} value={category}>{category}</option>
                 ))}
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="transaction_type" className="flex items-center mb-1.5">
+                <Type size={14} className="mr-2 text-gray-500" /> Transaction Type
+              </Label>
+              <Select
+                id="transaction_type"
+                name="transaction_type"
+                value={formData.transaction_type}
+                onChange={handleChange}
+                required
+                className="mt-1 w-full"
+              >
+                <option value="OUT">OUT (Expense)</option>
+                <option value="IN">IN (Income/Refund)</option>
               </Select>
             </div>
 

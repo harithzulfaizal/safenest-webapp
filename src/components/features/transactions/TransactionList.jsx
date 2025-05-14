@@ -31,12 +31,11 @@ export const TransactionList = ({ transactions, onEdit, onDelete }) => {
     setSelectedCategory(event.target.value);
   };
 
-  const getAmountColor = (type, amount) => {
-    // All transactions here are expenses, so amount will be negative
-    // Color will be based on the negative amount for expenses
-    if (amount < 0) return 'text-red-600 dark:text-red-400';
-    if (amount > 0 && type === 'income') return 'text-green-600 dark:text-green-400'; // For future income display
-    return 'text-gray-900 dark:text-white';
+  const getAmountColor = (transactionType) => {
+    const type = String(transactionType || '').trim().toUpperCase();
+    if (type === 'IN') return 'text-green-600 dark:text-green-400';
+    if (type === 'OUT') return 'text-red-600 dark:text-red-400';
+    return 'text-gray-900 dark:text-white'; // Default color
   };
 
   if (!transactions) return <p>Loading transactions...</p>; // Should be handled by parent, but good fallback
@@ -87,8 +86,9 @@ export const TransactionList = ({ transactions, onEdit, onDelete }) => {
                   {tx.description}
                 </TableCell>
                 <TableCell className="text-xs text-gray-600 dark:text-gray-400">{tx.category}</TableCell>
-                <TableCell className={`text-right font-mono text-sm ${getAmountColor(tx.type, tx.amount)}`}>
-                  {formatCurrency(tx.amount)}
+                <TableCell className={`text-right font-mono text-sm ${getAmountColor(tx.transaction_type)}`}>
+                  {String(tx.transaction_type || '').trim().toUpperCase() === 'IN' ? '+' : String(tx.transaction_type || '').trim().toUpperCase() === 'OUT' ? '-' : ''}
+                  {formatCurrency(Math.abs(tx.amount))}
                 </TableCell>
                 {/* New TableCell for Action Buttons */}
                 {(onEdit || onDelete) && (

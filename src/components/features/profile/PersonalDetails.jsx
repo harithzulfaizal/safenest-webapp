@@ -50,7 +50,7 @@ export const PersonalDetails = ({
                 icon={CalendarDays}
               />
             )}
-            {personalDetails.gender && personalDetails.gender !== 'N/A' && (
+            {personalDetails.gender && (
               <DetailItem
                 label="Gender"
                 value={personalDetails.gender}
@@ -68,8 +68,8 @@ export const PersonalDetails = ({
               icon={Users}
             />
             <DetailItem
-              label="Emergency Fund Savings Level"
-              value={personalDetails.emergencyFundSavingsLevel}
+              label="Savings"
+              value={personalDetails.savings}
               icon={ShieldCheck}
             />
           </div>

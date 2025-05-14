@@ -45,7 +45,7 @@ export const FinancialProfile = ({ profile, onAddDebt, onEditDebt, onDeleteDebt 
     { label: "Top Spending Category", value: profile.spendingHabit?.topCategory, icon: null },
     { label: "Spending Style", value: profile.spendingHabit?.style, icon: null },
     { label: "Savings Rate", value: profile.savingsHabit?.savingsRate, icon: null },
-    { label: "Emergency Fund Status", value: profile.savingsHabit?.emergencyFundStatus, icon: ShieldAlert },
+    { label: "Savings", value: profile.savings, icon: PiggyBank }, // Changed from Emergency Fund Status
   ];
   const validHabitsItems = habitsItemsRaw.filter(item => isValidValue(item.value));
 
