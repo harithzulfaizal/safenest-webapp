@@ -1,9 +1,10 @@
 // src/context/UserContext.jsx
 // Provides user data to components, fetched from the backend API
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { API_BASE_URL } from '../apiConfig'; // Removed DEFAULT_USER_ID import
+import { API_BASE_URL } from '../apiConfig';
 import { formatCurrency } from '../utils/formatters';
-import { useAuth } from './AuthContext'; // To get isLoggedIn and authenticatedUser
+import { useAuth } from './AuthContext';
+import { fetchComprehensiveUserDetailsAPI } from '../apiService';
 
 const UserContext = createContext();
 
@@ -21,31 +22,36 @@ const transformFinancialKnowledge = (knowledgeList) => {
   }, {});
 };
 
-// Helper to transform API goals object to array
-const transformGoals = (apiGoals) => {
+// Helper to transform API goals object (potentially ordered) to a sorted array for display
+const transformAndSortGoals = (apiGoals) => {
   if (!apiGoals || typeof apiGoals !== 'object' || Object.keys(apiGoals).length === 0) {
     return [];
   }
-  return Object.entries(apiGoals).map(([key, value]) => {
-    if (typeof value === 'object' && value.title && value.description) {
-      return { id: key, title: value.title, description: value.description };
-    }
-    if (typeof value === 'string') {
-      const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      return { id: key, title: title, description: value };
-    }
-    return { id: key, title: "Goal Detail", description: String(value) };
-  });
+  return Object.entries(apiGoals)
+    .sort(([keyA], [keyB]) => parseInt(keyA, 10) - parseInt(keyB, 10))
+    .map(([key, value]) => {
+      const baseGoal = { id: key, original_id: key, title: '', description: '' };
+      if (typeof value === 'object' && value.title && value.description) {
+        return { ...baseGoal, title: value.title, description: value.description };
+      }
+      if (typeof value === 'string') {
+        const title = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return { ...baseGoal, title: title, description: value };
+      }
+      return { ...baseGoal, title: `Goal ${key}`, description: String(value) };
+    });
 };
+
 
 export const UserProvider = ({ children }) => {
   const [user, setUser] = useState({
-    name: 'User', // Default name
-    email: 'user@example.com', // Default email
+    name: 'User',
+    email: 'user@example.com',
     memberSince: 'N/A',
     accountType: 'N/A',
     personalDetails: {
       age: 'N/A',
+      gender: 'N/A',
       netHouseholdIncome: 'N/A',
       employmentStatus: 'N/A',
       householdComposition: { dependentAdults: 0, dependentChildren: 0 },
@@ -77,9 +83,9 @@ export const UserProvider = ({ children }) => {
     _rawExpenses: [],
     _rawFinancialKnowledge: [],
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Tracks loading of user data
   const [error, setError] = useState(null);
-  const { isLoggedIn, authenticatedUser } = useAuth(); // Get authenticatedUser from AuthContext
+  const { isLoggedIn, authenticatedUser, isLoadingAuth } = useAuth(); // Added isLoadingAuth
 
   const fetchUserData = useCallback(async (userIdToFetch, userEmailFromAuth) => {
     if (!userIdToFetch) {
@@ -87,15 +93,10 @@ export const UserProvider = ({ children }) => {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    setLoading(true); // Set loading true at the start of fetch
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/users/${userIdToFetch}/comprehensive_details`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP error ${response.status}` }));
-        throw new Error(`Failed to fetch user data: ${response.status} - ${errorData.detail}`);
-      }
-      const data = await response.json();
+      const data = await fetchComprehensiveUserDetailsAPI(userIdToFetch);
 
       const totalRawMonthlyIncome = data.income?.reduce((sum, item) => {
         const incomeVal = parseFloat(String(item.monthly_income || '0').replace(/[^0-9.-]+/g, ""));
@@ -143,28 +144,28 @@ export const UserProvider = ({ children }) => {
         ? data.financial_knowledge
         : [];
 
-      setUser({
-        // Use email from AuthContext (from login response) as primary, fallback to profile API
+      setUser(prevUser => ({
+        ...prevUser,
         email: userEmailFromAuth || data.profile?.email || 'user@example.com',
         name: data.profile?.name || 'User',
-        memberSince: user.memberSince, // These are not from API, keep existing or set defaults
-        accountType: user.accountType, // These are not from API, keep existing or set defaults
         personalDetails: {
+          ...prevUser.personalDetails,
           age: data.profile?.age || 'N/A',
+          gender: data.profile?.gender || 'N/A',
           netHouseholdIncome: totalRawMonthlyIncome > 0 ? formatCurrency(totalRawMonthlyIncome) + ' monthly' : 'N/A',
           employmentStatus: data.profile?.retirement_status || "N/A",
           householdComposition: {
-            dependentAdults: 0, // Assuming not in API, or needs mapping
+            dependentAdults: data.profile?.dependent_adults || 0,
             dependentChildren: data.profile?.num_children || 0,
           },
-          emergencyFundSavingsLevel: 'N/A', // Needs calculation logic if applicable
         },
-        financialGoals: data.profile?.goals ? transformGoals(data.profile.goals) : [],
+        financialGoals: data.profile?.goals ? transformAndSortGoals(data.profile.goals) : [],
         financialKnowledge: transformFinancialKnowledge(knowledgeToTransform),
         financialProfile: {
-          netWorth: 'N/A', // Needs calculation
-          assets: 'N/A', // Needs calculation or specific API fields
-          savingsAmount: 'N/A', // Needs calculation or specific API fields
+          ...prevUser.financialProfile,
+          netWorth: 'N/A',
+          assets: 'N/A',
+          savingsAmount: 'N/A',
           liabilities: data.debts && data.debts.length > 0
             ? formatCurrency(data.debts.reduce((sum, item) => sum + parseFloat(String(item.current_balance || '0').replace(/[^0-9.-]+/g, "")), 0))
             : formatCurrency(0),
@@ -179,55 +180,58 @@ export const UserProvider = ({ children }) => {
             interest_rate: d.interest_rate,
             min_monthly_payment: d.min_monthly_payment ? parseFloat(String(d.min_monthly_payment || '0').replace(/[^0-9.-]+/g, "")) : null,
           })) : [],
-          dti: 'N/A', // Needs calculation
           spendingHabit: {
+            ...prevUser.financialProfile.spendingHabit,
             topCategory: Object.keys(expenseSummaryForLatestMonth).length > 0 ?
               Object.entries(expenseSummaryForLatestMonth).sort(([, a], [, b]) => b - a)[0][0]
               : (Object.keys(originalExpenseSummary).length > 0 ? Object.entries(originalExpenseSummary).sort(([, a], [, b]) => b - a)[0][0] : 'N/A'),
-            style: 'N/A', // Needs logic or API field
             expenseSummary: originalExpenseSummary,
             expenseSummaryForLatestMonth: expenseSummaryForLatestMonth,
             latestMonthForSummary: latestMonthForSummary,
           },
-          savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' }, // Needs calculation
         },
         _rawProfile: data.profile,
         _rawIncome: data.income || [],
         _rawDebts: data.debts || [],
         _rawExpenses: data.expenses || [],
         _rawFinancialKnowledge: knowledgeToTransform,
-      });
+      }));
     } catch (err) {
       console.error("Error fetching user data:", err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      setLoading(false); // Set loading false at the end of fetch
     }
-  }, [user.memberSince, user.accountType]); // Added dependencies that are used from previous state
+  }, []); // Empty dependency array: fetchUserData is stable and doesn't depend on component state/props
 
   useEffect(() => {
+    // Wait for auth check to complete
+    if (isLoadingAuth) {
+      return; 
+    }
+
     if (isLoggedIn && authenticatedUser && authenticatedUser.userId) {
-      // Fetch data using the userId from the authenticatedUser object
       fetchUserData(authenticatedUser.userId, authenticatedUser.email);
     } else if (!isLoggedIn) {
-      // Reset user state if not logged in or when logged out
+      // Reset user state and set loading to false if not logged in
       setUser({
         name: 'User', email: 'user@example.com', memberSince: 'N/A', accountType: 'N/A',
-        personalDetails: { age: 'N/A', netHouseholdIncome: 'N/A', employmentStatus: 'N/A', householdComposition: { dependentAdults: 0, dependentChildren: 0 }, emergencyFundSavingsLevel: 'N/A' },
+        personalDetails: { age: 'N/A', gender: 'N/A', netHouseholdIncome: 'N/A', employmentStatus: 'N/A', householdComposition: { dependentAdults: 0, dependentChildren: 0 }, emergencyFundSavingsLevel: 'N/A' },
         financialGoals: [], financialKnowledge: {},
         financialProfile: { netWorth: 'N/A', assets: 'N/A', savingsAmount: 'N/A', liabilities: 'N/A', totalDebt: 'N/A', numberOfDebtAccounts: 0, detailedDebts: [], dti: 'N/A', spendingHabit: { topCategory: 'N/A', style: 'N/A', expenseSummary: {}, expenseSummaryForLatestMonth: {}, latestMonthForSummary: null, }, savingsHabit: { savingsRate: 'N/A', emergencyFundStatus: 'N/A' }, },
         _rawProfile: null, _rawIncome: [], _rawDebts: [], _rawExpenses: [], _rawFinancialKnowledge: [],
       });
-      setLoading(false); // No data to load if not logged in
+      setLoading(false); // Explicitly set loading to false as no data fetch will occur
       setError(null);
     }
-  }, [isLoggedIn, authenticatedUser, fetchUserData]);
+  }, [isLoggedIn, authenticatedUser, fetchUserData, isLoadingAuth]); // Removed 'loading' from here
 
   const value = {
     user,
     setUser,
-    loading,
+    loading, // Consumers of the context might still need this loading state
     error,
+    fetchUserData,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
